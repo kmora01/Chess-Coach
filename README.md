@@ -38,7 +38,9 @@ python3 -m http.server 8000
 
 ## Publicar en GitHub Pages
 
-Settings → Pages → *Deploy from a branch* → rama `main`, carpeta `/ (root)`.
+Settings → Pages → *Source*: **GitHub Actions**. El flujo `.github/workflows/pages.yml` publica el sitio en cada push a `main`.
+
+Dirección: https://kmora01.github.io/Chess-Coach/
 
 ## Añadir un libro nuevo (capítulo)
 
