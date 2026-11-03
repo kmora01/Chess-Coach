@@ -42,9 +42,13 @@ export function renderComment(text, fensBefore, contextPly, registry) {
     try { const mv = c.move(san.replace(/^0-0-0/, 'O-O-O').replace(/^0-0/, 'O-O'), { strict: false }); return mv ? { c, mv, before: fen } : null; } catch { return null; }
   };
 
+  // Cada jugada enlazada sabe a qué secuencia pertenece (run.ids) para poder recorrer la variante.
   const emitMove = (res, label, ply, suffix) => {
     const id = registry.length;
-    registry.push({ fen: res.c.fen(), from: res.mv.from, to: res.mv.to, san: res.mv.san, ply });
+    if (!run.ids) run.ids = [];
+    run.ids.push(id);
+    registry.push({ fen: res.c.fen(), before: res.before, from: res.mv.from, to: res.mv.to, san: res.mv.san, ply,
+      label: `${label}${figurine(res.mv.san)}${suffix}`, seq: run.ids });
     return `<span class="cm-move" data-var="${id}">${label}${escapeHtml(figurine(res.mv.san))}${suffix}</span>`;
   };
 

@@ -151,7 +151,7 @@ function enginePanel(getFen, board, { autoStart = false, onLineClick } = {}) {
       setBar(c.isCheckmate() ? { mate: c.turn() === 'w' ? -0 : 0, cp: c.turn() === 'w' ? -10000 : 10000 } : { cp: 0 });
       return;
     }
-    status.textContent = 'cargando motor…';
+    status.textContent = engine.ready ? 'analizando…' : 'cargando motor…';
     engine.analyse(fen, {
       depth: Number(depthSel.value),
       onInfo: ({ depth, lines: ls }) => {
@@ -173,6 +173,11 @@ function enginePanel(getFen, board, { autoStart = false, onLineClick } = {}) {
         }
       },
       onBest: (best) => { if (best && fen === shownFen) status.textContent = status.textContent.replace('profundidad', 'terminado · prof.'); },
+      onError: () => {
+        if (fen !== shownFen) return;
+        status.innerHTML = '';
+        status.append('No se pudo cargar el motor. ', h('button', { class: 'btn small', onclick: () => run() }, 'Reintentar'));
+      },
     });
   };
   function setBar(line) {
@@ -215,31 +220,32 @@ async function viewGame(bookId, n, params) {
 
   let mode = params.get('modo') === 'entrenar' ? 'train' : 'review';
   let idx = Number(params.get('j') || 0); // número de jugadas mostradas (0 = posición inicial)
-  let preview = null; // { fen, lastMove, label } cuando se ve una variante del comentario
+  let preview = null; // id (en commentRegistry) de la jugada de variante que se está viendo
   let explore = null; // { chess, history: [] } exploración libre desde la posición actual
 
   const { shell, boardEl } = boardShell();
   const board = new Board(boardEl, { onMove: (m) => onBoardMove(m) });
   const commentRegistry = [];
 
-  const currentFen = () => explore ? explore.chess.fen() : preview ? preview.fen : fensBefore[idx];
+  const currentFen = () => explore ? explore.chess.fen() : preview != null ? commentRegistry[preview].fen : fensBefore[idx];
   const eng = enginePanel(currentFen, board, { onLineClick: null });
 
   // ---- cabecera
   const title = h('div', { class: 'game-title' },
     h('div', { class: 'gt-players' }, `${hd.White} – ${hd.Black}`, h('span', { class: 'gt-result' }, hd.Result)),
     h('div', { class: 'gt-meta' }, [eventLabel(hd), hd.Site && hd.Site !== '?' ? hd.Site : '', hd.Opening].filter(Boolean).join(' · ')));
-  const prevGame = n > 0 ? h('a', { class: 'btn ghost', href: `#/libro/${bookId}/partida/${n - 1}` }, '← Anterior') : null;
-  const nextGame = n < book.games.length - 1 ? h('a', { class: 'btn ghost', href: `#/libro/${bookId}/partida/${n + 1}` }, 'Siguiente →') : null;
+  const prevGame = n > 0 ? h('a', { class: 'btn ghost', title: 'Partida anterior', href: `#/libro/${bookId}/partida/${n - 1}` }, '←', h('span', { class: 'lbl-long' }, ' Anterior')) : null;
+  const nextGame = n < book.games.length - 1 ? h('a', { class: 'btn ghost', title: 'Partida siguiente', href: `#/libro/${bookId}/partida/${n + 1}` }, h('span', { class: 'lbl-long' }, 'Siguiente '), '→') : null;
 
   // ---- controles
   const ctrl = h('div', { class: 'controls' },
-    h('button', { class: 'btn icon navbtn', title: 'Inicio', onclick: () => go(0) }, '⏮'),
-    h('button', { class: 'btn icon navbtn', title: 'Atrás (←)', onclick: () => go(idx - 1) }, '◀'),
-    h('button', { class: 'btn icon navbtn', title: 'Adelante (→)', onclick: () => go(idx + 1) }, '▶'),
-    h('button', { class: 'btn icon navbtn', title: 'Final', onclick: () => go(moves.length) }, '⏭'),
+    h('button', { class: 'btn icon navbtn', title: 'Inicio', onclick: () => nav('start') }, '⏮'),
+    h('button', { class: 'btn icon navbtn', title: 'Atrás (←)', onclick: () => nav(-1) }, '◀'),
+    h('button', { class: 'btn icon navbtn', title: 'Adelante (→)', onclick: () => nav(1) }, '▶'),
+    h('button', { class: 'btn icon navbtn', title: 'Final', onclick: () => nav('end') }, '⏭'),
     h('button', { class: 'btn icon', title: 'Girar tablero (F)', onclick: () => board.flip() }, '⇅'),
-    h('button', { class: 'btn', title: 'Mover piezas libremente desde aquí con Stockfish', onclick: () => startExplore() }, 'Analizar posición'));
+    h('button', { class: 'btn analyse-btn', title: 'Mover piezas libremente desde aquí con Stockfish', onclick: () => startExplore() }, h('span', { class: 'long' }, 'Analizar posición'), h('span', { class: 'short' }, 'Analizar')));
+  const nowComment = h('div', { class: 'now-comment hidden' });
   const banner = h('div', { class: 'banner hidden' });
 
   // ---- pestañas
@@ -253,6 +259,7 @@ async function viewGame(bookId, n, params) {
   const intro = game.root.comment ? h('div', { class: 'comment intro', html: renderComment(game.root.comment, fensByPly, startPly, commentRegistry) }) : null;
   if (intro) moveList.append(intro);
   const moveEls = [];
+  const commentEls = [];
   let row = null;
   moves.forEach((m, i) => {
     const white = m.ply % 2 === 1;
@@ -269,18 +276,21 @@ async function viewGame(bookId, n, params) {
     if (m.comment || vars.length) {
       const c = h('div', { class: 'comment' });
       if (m.comment) c.innerHTML = renderComment(m.comment, fensByPly, m.ply, commentRegistry);
-      c.addEventListener('click', () => go(i + 1, { keepPreview: true }));
+      c.addEventListener('click', (e) => { if (!e.target.closest('.cm-move')) go(i + 1); });
+      commentEls[i] = c;
       moveList.append(c);
       row = null;
     }
   });
-  moveList.addEventListener('click', (e) => {
+  const onVarClick = (e) => {
     const t = e.target.closest('.cm-move');
     if (!t) return;
     e.stopPropagation();
-    const v = commentRegistry[Number(t.dataset.var)];
-    showPreview(v, t);
-  });
+    showPreview(Number(t.dataset.var));
+  };
+  moveList.addEventListener('click', onVarClick);
+  nowComment.addEventListener('click', onVarClick);
+  panelTrain.addEventListener('click', onVarClick);
   panelReview.append(moveList);
 
   // ---- entrenador
@@ -293,17 +303,32 @@ async function viewGame(bookId, n, params) {
   app.append(
     h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Biblioteca'), ' / ', h('a', { href: `#/libro/${bookId}` }, book.title), ' / ', `Partida ${hd.Round || n + 1}`),
     h('div', { class: 'game-top' }, title, h('div', { class: 'game-nav' }, prevGame, nextGame)),
-    h('div', { class: 'game-layout' }, h('div', { class: 'main' }, shell, banner, ctrl), side));
+    h('div', { class: 'game-layout' }, h('div', { class: 'main' }, shell, banner, nowComment, ctrl), side));
 
   // ---- lógica
-  function go(i, { keepPreview = false } = {}) {
+  function go(i) {
     if (mode === 'train') return;
     i = Math.max(0, Math.min(moves.length, i));
     idx = i;
-    if (!keepPreview) preview = null;
     explore = null;
     preview = null;
     render();
+  }
+  // Navegación: dentro de una variante del libro recorre la variante; si no, la partida.
+  function nav(d) {
+    if (mode === 'train') return;
+    if (preview != null && !explore) {
+      const seq = commentRegistry[preview].seq;
+      const pos = seq.indexOf(preview);
+      if (d === 'start' || (d === -1 && pos === 0)) { preview = null; render(); return; }
+      if (d === 'end') { preview = seq[seq.length - 1]; render(); return; }
+      const np = pos + d;
+      if (np >= 0 && np < seq.length) { preview = seq[np]; render(); }
+      return;
+    }
+    if (d === 'start') go(0);
+    else if (d === 'end') go(moves.length);
+    else go(idx + d);
   }
   function render() {
     banner.classList.add('hidden');
@@ -319,19 +344,36 @@ async function viewGame(bookId, n, params) {
         h('button', { class: 'btn small', onclick: () => { explore = null; if (mode === 'train') { banner.classList.add('hidden'); trainer.resume(); } else render(); } }, mode === 'train' ? 'Volver al entrenamiento' : 'Volver a la partida'));
       banner.classList.remove('hidden');
       board.set(fen, { lastMove, interactive: true, userColor: null });
-    } else if (preview) {
-      fen = preview.fen;
+    } else if (preview != null) {
+      const v = commentRegistry[preview];
+      fen = v.fen;
+      const pos = v.seq.indexOf(preview);
       banner.innerHTML = '';
-      banner.append(h('span', {}, 'Variante del libro: ', h('b', {}, preview.label)),
-        h('button', { class: 'btn small', onclick: () => { explore = { chess: new Chess(preview.fen) }; preview = null; render(); } }, 'Seguir analizando'),
-        h('button', { class: 'btn small', onclick: () => { preview = null; render(); } }, 'Volver a la partida'));
+      const line = h('span', { class: 'var-line' }, 'Variante: ', v.seq.flatMap((id) => [h('span', {
+        class: 'var-mv' + (id === preview ? ' current' : ''), onclick: () => { preview = id; render(); },
+      }, commentRegistry[id].label), ' ']));
+      banner.append(line,
+        h('div', { class: 'var-actions' },
+          h('button', { class: 'btn small icon', title: 'Jugada anterior de la variante', onclick: () => nav(-1) }, '◀'),
+          h('button', { class: 'btn small icon', title: 'Jugada siguiente de la variante', disabled: pos >= v.seq.length - 1 ? 'disabled' : null, onclick: () => nav(1) }, '▶'),
+          h('button', { class: 'btn small', onclick: () => { explore = { chess: new Chess(v.fen) }; preview = null; render(); } }, 'Seguir analizando'),
+          h('button', { class: 'btn small', onclick: () => { preview = null; render(); } }, 'Volver a la partida')));
       banner.classList.remove('hidden');
-      board.set(fen, { lastMove: [preview.from, preview.to], interactive: false });
+      board.set(fen, { lastMove: [v.from, v.to], interactive: false });
+      document.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
+      document.querySelectorAll(`.cm-move[data-var="${preview}"]`).forEach((e) => e.classList.add('current'));
     } else if (mode === 'review') {
       fen = fensBefore[idx];
       const m = moves[idx - 1];
       board.set(fen, { lastMove: m ? [m.from, m.to] : null, interactive: false });
+      document.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
     }
+    // comentario de la jugada actual bajo el tablero (útil en el móvil)
+    if (mode === 'review' && !explore && preview == null) {
+      const c = commentEls[idx - 1] || (idx === 0 ? intro : null);
+      nowComment.innerHTML = c ? c.innerHTML : '';
+      nowComment.classList.toggle('hidden', !c);
+    } else if (mode !== 'review') nowComment.classList.add('hidden');
     moveEls.forEach((el, k) => el.classList.toggle('current', k === idx - 1 && !explore));
     const cur = moveEls[idx - 1];
     if (cur && mode === 'review') {
@@ -343,12 +385,12 @@ async function viewGame(bookId, n, params) {
     }
     if (mode === 'review' || explore) eng.run();
   }
-  function showPreview(v, el) {
+  function showPreview(id) {
+    const v = commentRegistry[id];
+    if (!v) return;
     if (mode === 'train') { board.set(v.fen, { lastMove: [v.from, v.to], interactive: false }); trainer.previewing(); return; }
-    preview = { ...v, label: el.textContent };
+    preview = id;
     explore = null;
-    moveList.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
-    el.classList.add('current');
     render();
   }
   function startExplore() {
@@ -550,10 +592,11 @@ async function viewGame(bookId, n, params) {
   // teclado
   const onKey = (e) => {
     if (e.target.matches('input, select, textarea')) return;
-    if (e.key === 'ArrowLeft') { go(idx - 1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { go(idx + 1); e.preventDefault(); }
-    if (e.key === 'Home') go(0);
-    if (e.key === 'End') go(moves.length);
+    if (e.key === 'ArrowLeft') { nav(-1); e.preventDefault(); }
+    if (e.key === 'ArrowRight') { nav(1); e.preventDefault(); }
+    if (e.key === 'Escape' && preview != null) { preview = null; render(); }
+    if (e.key === 'Home') nav('start');
+    if (e.key === 'End') nav('end');
     if (e.key === 'f') board.flip();
   };
   window.addEventListener('keydown', onKey);

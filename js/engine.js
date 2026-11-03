@@ -14,20 +14,48 @@ export class Engine {
 
   start() {
     if (this.ready) return this.ready;
-    this.worker = new Worker(ENGINE_URL);
-    this.ready = new Promise((resolve) => {
-      const onReady = (line) => { if (line === 'readyok') { this.off(onReady); resolve(); } };
+    this.searching = false;
+    this._idle = [];
+    this.ready = new Promise((resolve, reject) => {
+      let worker;
+      try { worker = new Worker(ENGINE_URL); } catch (err) { reject(err); return; }
+      this.worker = worker;
+      const fail = (why) => {
+        clearTimeout(timer);
+        this.off(onReady);
+        try { worker.terminate(); } catch { /* */ }
+        if (this.worker === worker) { this.worker = null; this.ready = null; }
+        reject(new Error(why));
+      };
+      // en móviles lentos la primera carga (≈7 MB de WASM) puede tardar; damos margen y luego reintentamos
+      const timer = setTimeout(() => fail('tiempo de carga agotado'), 45000);
+      const onReady = (line) => { if (line === 'readyok') { clearTimeout(timer); this.off(onReady); resolve(); } };
       this.on(onReady);
+      worker.onerror = (e) => { e.preventDefault?.(); fail('error al cargar Stockfish'); };
+      worker.onmessage = (e) => {
+        const line = typeof e.data === 'string' ? e.data : String(e.data);
+        if (line.startsWith('bestmove')) {
+          this.searching = false;
+          this._idle.splice(0).forEach((r) => r());
+        }
+        for (const l of [...this.listeners]) l(line);
+      };
+      this.send('uci');
+      this.send('setoption name Hash value 32');
+      this.send(`setoption name MultiPV value ${this.multipv}`);
+      this.send('isready');
     });
-    this.worker.onmessage = (e) => {
-      const line = typeof e.data === 'string' ? e.data : String(e.data);
-      for (const l of this.listeners) l(line);
-    };
-    this.send('uci');
-    this.send('setoption name Hash value 32');
-    this.send(`setoption name MultiPV value ${this.multipv}`);
-    this.send('isready');
     return this.ready;
+  }
+
+  // Espera a que termine la búsqueda en curso (su "bestmove") para no mezclarla con la nueva.
+  _waitIdle() {
+    if (!this.searching) return Promise.resolve();
+    this.send('stop');
+    return new Promise((resolve) => {
+      const t = setTimeout(() => { this.searching = false; resolve(); }, 3000);
+      this._idle.push(() => { clearTimeout(t); resolve(); });
+    });
   }
 
   on(fn) { this.listeners.add(fn); }
@@ -42,11 +70,16 @@ export class Engine {
   }
 
   // Análisis continuo. onInfo recibe { depth, lines: [{ multipv, cp, mate, pv: [uci...] }] }
-  async analyse(fen, { depth = 22, movetime = null, onInfo, onBest } = {}) {
-    await this.start();
+  async analyse(fen, { depth = 22, movetime = null, onInfo, onBest, onError } = {}) {
     const token = this._seq = (this._seq || 0) + 1;
-    if (this._handler) { this.off(this._handler); this._cancel && this._cancel(); this._handler = null; }
-    this.stop();
+    if (this._handler) { this.off(this._handler); this._cancel && this._cancel(); this._handler = null; this._cancel = null; }
+    try { await this.start(); } catch (err) {
+      if (token === this._seq) onError ? onError(err) : (onBest && onBest(null, []));
+      else onBest && onBest(null, []);
+      return;
+    }
+    await this._waitIdle();
+    if (token !== this._seq) { onBest && onBest(null, []); return; }
     const turn = fen.split(' ')[1];
     const probe = new Chess(fen);
     const legal = new Set(probe.moves({ verbose: true }).map((m) => m.from + m.to + (m.promotion || '')));
@@ -70,20 +103,18 @@ export class Engine {
         lastDepth = Math.max(lastDepth, d);
         lines[mpv - 1] = entry;
         onInfo && onInfo({ depth: d, fen, lines: lines.filter(Boolean) });
-      } else if (line.startsWith('bestmove') && (isLegal(line.split(' ')[1] || '') || legal.size === 0)) {
+      } else if (line.startsWith('bestmove')) {
         this.off(handler);
         if (this._handler === handler) { this._handler = null; this._cancel = null; }
-        onBest && onBest(line.split(' ')[1], lines.filter(Boolean));
+        const best = line.split(' ')[1];
+        onBest && onBest(best && best !== '(none)' ? best : null, lines.filter(Boolean));
       }
     };
-    // esperar a que termine la búsqueda anterior
-    this.send('isready');
-    await new Promise((r) => { const h = (l) => { if (l === 'readyok') { this.off(h); r(); } }; this.on(h); });
-    if (token !== this._seq) { onBest && onBest(null, []); return; }
     this._handler = handler;
     this._cancel = () => onBest && onBest(null, lines.filter(Boolean));
     this.on(handler);
     this.send(`position fen ${fen}`);
+    this.searching = true;
     this.send(movetime ? `go movetime ${movetime}` : `go depth ${depth}`);
   }
 
