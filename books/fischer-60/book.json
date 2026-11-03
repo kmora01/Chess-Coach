@@ -1,0 +1,9 @@
+{
+  "id": "fischer-60",
+  "title": "My 60 Memorable Games",
+  "author": "Bobby Fischer",
+  "hero": "Fischer",
+  "language": "en",
+  "pgn": "games.pgn",
+  "note": "Comentarios en inglés, tal como aparecen en el libro (edición Batsford 2008). Extraídos por OCR y validados jugada a jugada."
+}

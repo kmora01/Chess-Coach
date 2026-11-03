@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""OCR de un libro de ajedrez escaneado.
+
+1. Renderiza cada página del PDF a 200 ppp.
+2. Localiza las figuras de piezas (♔♕♖♗♘) por plantillas (tools/templates/*.png)
+   y las sustituye por letras K Q R B N, para que el OCR las lea como notación algebraica.
+3. Ejecuta OCR (RapidOCR / PP-OCRv6) sobre la página corregida y guarda v6-NNN.json.
+
+Uso: python3 ocr_pages.py LIBRO.pdf CARPETA_SALIDA PRIMERA ULTIMA
+Requiere: pip install rapidocr onnxruntime opencv-python-headless pillow; poppler-utils (pdftoppm).
+"""
+import sys, os, json, subprocess, glob
+import numpy as np, cv2
+from PIL import Image, ImageDraw, ImageFont
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TPL = [(os.path.basename(f)[0], cv2.imread(f, 0)) for f in sorted(glob.glob(os.path.join(HERE, 'templates', '*.png')))]
+FONT_PATHS = ['/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf']
+
+
+def find_figurines(path, thr=0.70):
+    im = cv2.imread(path, 0)
+    hits = []
+    for p, t0 in TPL:
+        for sc in (0.92, 0.96, 1.0, 1.04, 1.08, 1.12):  # la escala del escaneo varía entre páginas
+            t = cv2.resize(t0, None, fx=sc, fy=sc) if sc != 1.0 else t0
+            r = cv2.matchTemplate(im, t, cv2.TM_CCOEFF_NORMED)
+            ys, xs = np.where(r >= thr)
+            for y, x in zip(ys, xs):
+                hits.append((float(r[y, x]), int(x), int(y), p, t.shape[1], t.shape[0]))
+    hits.sort(reverse=True)
+    keep = []
+    for h in hits:
+        if all(abs(h[1] - k[1]) > 20 or abs(h[2] - k[2]) > 20 for k in keep):
+            keep.append(h)
+    return keep
+
+
+def main():
+    from rapidocr import RapidOCR
+    pdf, outdir, start, end = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+    os.makedirs(outdir, exist_ok=True)
+    font = ImageFont.truetype(next(f for f in FONT_PATHS if os.path.exists(f)), 38)
+    eng = RapidOCR()
+    for p in range(start, end + 1):
+        out = f'{outdir}/v6-{p:03d}.json'
+        if os.path.exists(out):
+            continue
+        img_path = f'{outdir}/img-{p:03d}.png'
+        if not os.path.exists(img_path):
+            subprocess.run(['pdftoppm', '-f', str(p), '-l', str(p), '-r', '200', '-gray', '-png', '-singlefile', pdf, img_path[:-4]], check=True)
+        hits = find_figurines(img_path)
+        img = Image.open(img_path).convert('L')
+        d = ImageDraw.Draw(img)
+        for sc, x, y, pc, w, h in hits:
+            d.rectangle([x - 1, y - 1, x + w + 1, y + h + 1], fill=255)
+            bb = d.textbbox((0, 0), pc, font=font)
+            d.text((x + w - (bb[2] - bb[0]) - bb[0] - 1, y + h - bb[3] + 2), pc, font=font, fill=0)
+        fixed = f'{outdir}/fixed-{p:03d}.png'
+        img.save(fixed)
+        r = eng(fixed, use_det=True, use_cls=False, use_rec=True)
+        items = []
+        if r.boxes is not None:
+            for b, t, s in zip(r.boxes, r.txts, r.scores):
+                items.append({'box': [[float(a) for a in pt] for pt in b], 'text': t, 'conf': float(s)})
+        figs = [dict(score=h[0], x=h[1], y=h[2], p=h[3], w=h[4], h=h[5]) for h in hits]
+        json.dump({'items': items, 'figs': figs}, open(out, 'w'), ensure_ascii=False)
+        print(p, flush=True)
+
+
+if __name__ == '__main__':
+    main()

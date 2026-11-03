@@ -1,0 +1,10 @@
+{
+  "books": [
+    {
+      "id": "fischer-60",
+      "title": "My 60 Memorable Games",
+      "author": "Bobby Fischer",
+      "description": "60 partidas de Fischer (1957–1967) comentadas por él mismo, con introducciones de Larry Evans."
+    }
+  ]
+}

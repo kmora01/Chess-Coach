@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chess Coach</title>
+  <meta name="description" content="Entrenador de ajedrez interactivo basado en libros de partidas comentadas.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>♞</text></svg>">
+  <link rel="stylesheet" href="vendor/chessground/chessground.base.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.brown.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.cburnett.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/"><span class="logo">♞</span> Chess Coach</a>
+    <nav class="nav">
+      <a href="#/">Biblioteca</a>
+      <a href="#/analisis">Análisis libre</a>
+    </nav>
+  </header>
+  <main id="app"></main>
+  <footer class="foot">Tablero: <a href="https://github.com/lichess-org/chessground">chessground</a> · Reglas: <a href="https://github.com/jhlywa/chess.js">chess.js</a> · Motor: <a href="https://github.com/nmrugg/stockfish.js">Stockfish 17.1 (WASM)</a></footer>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

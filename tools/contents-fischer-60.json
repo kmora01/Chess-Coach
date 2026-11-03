@@ -1,0 +1,484 @@
+{
+ "games": [
+  {
+   "n": 1,
+   "opponent": "Sherwin",
+   "opp_color": "black",
+   "event": "New Jersey Open 1957",
+   "book_page": 13,
+   "title": "Too little, too late"
+  },
+  {
+   "n": 2,
+   "opponent": "Larsen",
+   "opp_color": "black",
+   "event": "Portoroz 1958",
+   "book_page": 18,
+   "title": "Slaying the dragon"
+  },
+  {
+   "n": 3,
+   "opponent": "Petrosian",
+   "opp_color": "white",
+   "event": "Portoroz 1958",
+   "book_page": 23,
+   "title": "Bear hug"
+  },
+  {
+   "n": 4,
+   "opponent": "Pilnik",
+   "opp_color": "white",
+   "event": "Mar del Plata 1959",
+   "book_page": 32,
+   "title": "Tact and tactics"
+  },
+  {
+   "n": 5,
+   "opponent": "Rossetto",
+   "opp_color": "black",
+   "event": "Mar del Plata 1959",
+   "book_page": 38,
+   "title": "The unpleasant obligation"
+  },
+  {
+   "n": 6,
+   "opponent": "Shocron",
+   "opp_color": "black",
+   "event": "Mar del Plata 1959",
+   "book_page": 43,
+   "title": "A small oversight"
+  },
+  {
+   "n": 7,
+   "opponent": "Olafsson",
+   "opp_color": "white",
+   "event": "Zurich 1959",
+   "book_page": 49,
+   "title": "Pride goeth"
+  },
+  {
+   "n": 8,
+   "opponent": "Keres",
+   "opp_color": "black",
+   "event": "Zurich 1959",
+   "book_page": 54,
+   "title": "Meat and potatoes"
+  },
+  {
+   "n": 9,
+   "opponent": "Walther",
+   "opp_color": "white",
+   "event": "Zurich 1959",
+   "book_page": 62,
+   "title": "Betwixt the cup and the lip"
+  },
+  {
+   "n": 10,
+   "opponent": "Unzicker",
+   "opp_color": "black",
+   "event": "Zurich 1959",
+   "book_page": 68,
+   "title": "Milking the Cow"
+  },
+  {
+   "n": 11,
+   "opponent": "Benko",
+   "opp_color": "black",
+   "event": "Candidates' 1959",
+   "book_page": 74,
+   "title": "Unheard melodies"
+  },
+  {
+   "n": 12,
+   "opponent": "Gligorich",
+   "opp_color": "white",
+   "event": "Candidates' 1959",
+   "book_page": 78,
+   "title": "Castling into it"
+  },
+  {
+   "n": 13,
+   "opponent": "Gligorich",
+   "opp_color": "black",
+   "event": "Candidates' 1959",
+   "book_page": 87,
+   "title": "Something new"
+  },
+  {
+   "n": 14,
+   "opponent": "Keres",
+   "opp_color": "white",
+   "event": "Candidates' 1959",
+   "book_page": 92,
+   "title": "Too many cooks"
+  },
+  {
+   "n": 15,
+   "opponent": "Smyslov",
+   "opp_color": "white",
+   "event": "Candidates' 1959",
+   "book_page": 100,
+   "title": "A whopper"
+  },
+  {
+   "n": 16,
+   "opponent": "Petrosian",
+   "opp_color": "black",
+   "event": "Candidates' 1959",
+   "book_page": 106,
+   "title": "Four Queens"
+  },
+  {
+   "n": 17,
+   "opponent": "Tal",
+   "opp_color": "black",
+   "event": "Candidates' 1959",
+   "book_page": 116,
+   "title": "A very near miss"
+  },
+  {
+   "n": 18,
+   "opponent": "Spassky",
+   "opp_color": "white",
+   "event": "Mar del Plata 1960",
+   "book_page": 123,
+   "title": "Old wine in a new bottle"
+  },
+  {
+   "n": 19,
+   "opponent": "Gudmundsson",
+   "opp_color": "white",
+   "event": "Reykjavik 1960",
+   "book_page": 128,
+   "title": "A long voyage home"
+  },
+  {
+   "n": 20,
+   "opponent": "Euwe",
+   "opp_color": "black",
+   "event": "Leipzig Olympic 1960",
+   "book_page": 133,
+   "title": "Theoretical scuffle"
+  },
+  {
+   "n": 21,
+   "opponent": "Letelier",
+   "opp_color": "white",
+   "event": "Leipzig Olympic 1960",
+   "book_page": 137,
+   "title": "A Queen for the King"
+  },
+  {
+   "n": 22,
+   "opponent": "Szabo",
+   "opp_color": "white",
+   "event": "Leipzig Olympic 1960",
+   "book_page": 141,
+   "title": "Bad judgment"
+  },
+  {
+   "n": 23,
+   "opponent": "Tal",
+   "opp_color": "black",
+   "event": "Leipzig Olympic 1960",
+   "book_page": 145,
+   "title": "No holds barred"
+  },
+  {
+   "n": 24,
+   "opponent": "Darga",
+   "opp_color": "black",
+   "event": "West Berlin 1960",
+   "book_page": 150,
+   "title": "Asking for trouble"
+  },
+  {
+   "n": 25,
+   "opponent": "Lombardy",
+   "opp_color": "white",
+   "event": "USA Championship 1960-1",
+   "book_page": 156,
+   "title": "When the Maroczy didn't bind"
+  },
+  {
+   "n": 26,
+   "opponent": "Reshevsky",
+   "opp_color": "black",
+   "event": "2nd match game 1961",
+   "book_page": 161,
+   "title": "Time will tell"
+  },
+  {
+   "n": 27,
+   "opponent": "Reshevsky",
+   "opp_color": "white",
+   "event": "5th match game 1961",
+   "book_page": 167,
+   "title": "Sheer pyrotechnics"
+  },
+  {
+   "n": 28,
+   "opponent": "Reshevsky",
+   "opp_color": "white",
+   "event": "11th match game 1961",
+   "book_page": 175,
+   "title": "A peccable draw"
+  },
+  {
+   "n": 29,
+   "opponent": "Geller",
+   "opp_color": "black",
+   "event": "Bled 1961",
+   "book_page": 182,
+   "title": "Hoist with his own petard"
+  },
+  {
+   "n": 30,
+   "opponent": "Gligorich",
+   "opp_color": "white",
+   "event": "Bled 1961",
+   "book_page": 187,
+   "title": "A lyrical performance"
+  },
+  {
+   "n": 31,
+   "opponent": "Petrosian",
+   "opp_color": "black",
+   "event": "Bled 1961",
+   "book_page": 191,
+   "title": "The sincerest form of flattery"
+  },
+  {
+   "n": 32,
+   "opponent": "Tal",
+   "opp_color": "black",
+   "event": "Bled 1961",
+   "book_page": 196,
+   "title": "The moral victor"
+  },
+  {
+   "n": 33,
+   "opponent": "Trifunovich",
+   "opp_color": "black",
+   "event": "Bled 1961",
+   "book_page": 201,
+   "title": "The drawing master"
+  },
+  {
+   "n": 34,
+   "opponent": "Bertok",
+   "opp_color": "white",
+   "event": "Stockholm 1962",
+   "book_page": 207,
+   "title": "Hanging pawns unhung"
+  },
+  {
+   "n": 35,
+   "opponent": "Bolbochan",
+   "opp_color": "black",
+   "event": "Stockholm 1962",
+   "book_page": 212,
+   "title": "A brilliant cadenza"
+  },
+  {
+   "n": 36,
+   "opponent": "Korchnoi",
+   "opp_color": "black",
+   "event": "Stockholm 1962",
+   "book_page": 218,
+   "title": "Gaston and Alphonse"
+  },
+  {
+   "n": 37,
+   "opponent": "Keres",
+   "opp_color": "white",
+   "event": "Curaçao 1962",
+   "book_page": 225,
+   "title": "Only a draw"
+  },
+  {
+   "n": 38,
+   "opponent": "Keres",
+   "opp_color": "black",
+   "event": "Curaçao 1962",
+   "book_page": 234,
+   "title": "Detective story"
+  },
+  {
+   "n": 39,
+   "opponent": "Botvinnik",
+   "opp_color": "white",
+   "event": "Varna Olympic 1962",
+   "book_page": 240,
+   "title": "The confrontation"
+  },
+  {
+   "n": 40,
+   "opponent": "Najdorf",
+   "opp_color": "black",
+   "event": "Varna Olympic 1962",
+   "book_page": 254,
+   "title": "The Najdorf Variation"
+  },
+  {
+   "n": 41,
+   "opponent": "Robatsch",
+   "opp_color": "black",
+   "event": "Varna Olympic 1962",
+   "book_page": 260,
+   "title": "A bright cameo"
+  },
+  {
+   "n": 42,
+   "opponent": "Unzicker",
+   "opp_color": "white",
+   "event": "Varna Olympic 1962",
+   "book_page": 265,
+   "title": "Playing by ear"
+  },
+  {
+   "n": 43,
+   "opponent": "Reshevsky",
+   "opp_color": "black",
+   "event": "USA Championship 1962-3",
+   "book_page": 269,
+   "title": "The missing link"
+  },
+  {
+   "n": 44,
+   "opponent": "Fine",
+   "opp_color": "black",
+   "event": "Skittles Game 1963",
+   "book_page": 276,
+   "title": "Shock treatment"
+  },
+  {
+   "n": 45,
+   "opponent": "Bisguier",
+   "opp_color": "black",
+   "event": "New York State Open 1963",
+   "book_page": 280,
+   "title": "Ghosts"
+  },
+  {
+   "n": 46,
+   "opponent": "Benko",
+   "opp_color": "black",
+   "event": "USA Championship 1963-4",
+   "book_page": 286,
+   "title": "Romp"
+  },
+  {
+   "n": 47,
+   "opponent": "Bisguier",
+   "opp_color": "black",
+   "event": "USA Championship 1963-4",
+   "book_page": 291,
+   "title": "The Indian sign?"
+  },
+  {
+   "n": 48,
+   "opponent": "R.Byrne",
+   "opp_color": "white",
+   "event": "USA Championship 1963-4",
+   "book_page": 297,
+   "title": "The brilliancy prize"
+  },
+  {
+   "n": 49,
+   "opponent": "Steinmeyer",
+   "opp_color": "black",
+   "event": "USA Championship 1963-4",
+   "book_page": 302,
+   "title": "A complex trap"
+  },
+  {
+   "n": 50,
+   "opponent": "Celle",
+   "opp_color": "black",
+   "event": "Exhibition Tour 1964",
+   "book_page": 306,
+   "title": "Tour de force"
+  },
+  {
+   "n": 51,
+   "opponent": "Smyslov",
+   "opp_color": "black",
+   "event": "Havana (Capablanca Memorial) 1965",
+   "book_page": 311,
+   "title": "Squeeze play"
+  },
+  {
+   "n": 52,
+   "opponent": "Rossolimo",
+   "opp_color": "black",
+   "event": "USA Championship 1965-6",
+   "book_page": 318,
+   "title": "Peekaboo strategy"
+  },
+  {
+   "n": 53,
+   "opponent": "Portisch",
+   "opp_color": "white",
+   "event": "Santa Monica 1966",
+   "book_page": 324,
+   "title": "Black magic"
+  },
+  {
+   "n": 54,
+   "opponent": "Najdorf",
+   "opp_color": "black",
+   "event": "Santa Monica 1966",
+   "book_page": 331,
+   "title": "Najdorf's night off from the Najdorf"
+  },
+  {
+   "n": 55,
+   "opponent": "Bednarsky",
+   "opp_color": "black",
+   "event": "Havana Olympic 1966",
+   "book_page": 338,
+   "title": "The price of incaution"
+  },
+  {
+   "n": 56,
+   "opponent": "Gligorich",
+   "opp_color": "black",
+   "event": "Havana Olympic 1966",
+   "book_page": 343,
+   "title": "The Fischer continuation"
+  },
+  {
+   "n": 57,
+   "opponent": "Larsen",
+   "opp_color": "white",
+   "event": "Monaco 1967",
+   "book_page": 350,
+   "title": "Change of pace"
+  },
+  {
+   "n": 58,
+   "opponent": "Geller",
+   "opp_color": "black",
+   "event": "Skopje 1967",
+   "book_page": 359,
+   "title": "Flawed masterpiece"
+  },
+  {
+   "n": 59,
+   "opponent": "Kholmov",
+   "opp_color": "white",
+   "event": "Skopje 1967",
+   "book_page": 366,
+   "title": "The erring Bishop"
+  },
+  {
+   "n": 60,
+   "opponent": "Stein",
+   "opp_color": "black",
+   "event": "Sousse 1967",
+   "book_page": 371,
+   "title": "When champions meet"
+  }
+ ]
+}
