@@ -38,6 +38,7 @@ export class Board {
   }
 
   set(fen, { lastMove = null, interactive = this.interactive, userColor = this.userColor, shapes = [] } = {}) {
+    if (this.destroyed) return;
     this.fen = fen;
     this.interactive = interactive;
     this.userColor = userColor;
@@ -52,15 +53,17 @@ export class Board {
       movable: { color: canMove ? turn : undefined, dests: canMove ? legalDests(chess) : new Map() },
     });
     if (!lastMove) this.cg.set({ lastMove: undefined });
+    this.baseShapes = shapes;
     this.cg.setAutoShapes(shapes);
   }
 
-  shapes(list) { this.cg.setAutoShapes(list); }
+  // flechas extra (motor, pistas) que se suman a las de la posición (p. ej. las del libro)
+  shapes(list) { if (!this.destroyed) this.cg.setAutoShapes([...(this.baseShapes || []), ...list]); }
   orient(color) { this.cg.set({ orientation: color }); }
   flip() { this.cg.toggleOrientation(); }
   get orientation() { return this.cg.state.orientation; }
   redraw() { this.cg.redrawAll(); }
-  destroy() { this.cg.destroy(); }
+  destroy() { this.destroyed = true; this.cg.destroy(); }
 }
 
 export function uciToSanLine(fen, pv, max = 12) {

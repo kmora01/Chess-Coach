@@ -1,0 +1,5 @@
+# Fuentes en claro de los libros: nunca se suben (el sitio usa las versiones cifradas .enc)
+private/
+*.plain.*
+tools/__pycache__/
+tools/fco/__pycache__/
