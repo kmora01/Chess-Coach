@@ -1,31 +1,19 @@
 import { Chess } from '../vendor/chess.js';
-import { Board, uciToSanLine } from './board.js';
-import { Engine, formatScore, scoreToBar } from './engine.js';
+import { Board } from './board.js';
+import { formatScore } from './engine.js';
+import { h, store, esc, engine, enginePanel, boardShell, scrollIntoViewIfNeeded } from './ui.js';
 import { splitGames, parseGame, mainline, nagToSymbol, moveNumberLabel } from './pgn.js';
 import { renderComment, figurine } from './comments.js';
+import { fetchSecret, isLoggedIn, login, logout, AuthError } from './auth.js';
+import { OpeningBook } from './opbook.js';
+import { viewOpeningBook, viewChapter, viewExplorer, viewEcoIndex, prepareOpeningBook } from './openings.js';
+import { loadEco, classifyLine } from './eco.js';
 
 const app = document.getElementById('app');
-const engine = new Engine();
 const cache = { library: null, books: {}, games: {} };
 let cleanup = null;
 
 // ---------- utilidades ----------
-const h = (tag, attrs = {}, ...children) => {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
-    if (k === 'class') el.className = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else if (k === 'html') el.innerHTML = v;
-    else if (v !== false && v != null) el.setAttribute(k, v);
-  }
-  for (const c of children.flat()) if (c != null && c !== false) el.append(c.nodeType ? c : document.createTextNode(c));
-  return el;
-};
-const store = {
-  get(k, d) { try { const v = localStorage.getItem('cc:' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('cc:' + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
-};
-const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 async function loadLibrary() {
   if (!cache.library) cache.library = await (await fetch('books/index.json')).json();
@@ -37,7 +25,14 @@ async function loadBook(id) {
   const entry = lib.books.find((b) => b.id === id);
   if (!entry) throw new Error('Libro no encontrado');
   const meta = await (await fetch(`books/${id}/book.json`)).json();
-  const pgnText = await (await fetch(`books/${id}/${meta.pgn || 'games.pgn'}`)).text();
+  if (meta.type === 'openings') {
+    const data = JSON.parse(await fetchSecret(`books/${id}/${meta.data}`));
+    const book = { ...entry, ...meta, chapters: data.chapters, op: new OpeningBook(data) };
+    await prepareOpeningBook(book);
+    cache.books[id] = book;
+    return book;
+  }
+  const pgnText = await fetchSecret(`books/${id}/${meta.pgn || 'games.pgn'}.enc`);
   const games = splitGames(pgnText).map((t, i) => ({ index: i, text: t, headers: parseHeaders(t) }));
   cache.books[id] = { ...entry, ...meta, games };
   return cache.books[id];
@@ -61,21 +56,83 @@ function eventLabel(hd) {
   const year = (hd.Date || '').slice(0, 4).replace(/\?/g, '');
   return ev && year && ev.includes(year) ? ev : [ev, year].filter(Boolean).join(' ');
 }
-route();
 
-function route() {
+let routeId = 0;
+async function route() {
   if (cleanup) { cleanup(); cleanup = null; }
   engine.worker && engine.stop();
+  const my = ++routeId;
   const hash = location.hash.slice(1) || '/';
   const [path, query] = hash.split('?');
   const params = new URLSearchParams(query || '');
   const parts = path.split('/').filter(Boolean);
   document.querySelectorAll('.nav a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + (parts[0] === 'analisis' ? '/analisis' : '/')));
+  updateNav();
   app.innerHTML = '';
-  if (parts[0] === 'libro' && parts[2] === 'partida') return viewGame(parts[1], Number(parts[3]), params);
-  if (parts[0] === 'libro') return viewBook(parts[1]);
-  if (parts[0] === 'analisis') return viewAnalysis(params);
-  return viewLibrary();
+  window.scrollTo(0, 0);
+  if (!isLoggedIn()) return viewLogin();
+  try {
+    let res;
+    if (parts[0] === 'libro' && parts[2] === 'partida') res = await viewGame(parts[1], Number(parts[3]), params);
+    else if (parts[0] === 'libro' && parts[1]) {
+      app.append(h('p', { class: 'muted loading' }, 'Cargando libro…'));
+      const book = await loadBook(parts[1]);
+      if (my !== routeId) return;
+      app.innerHTML = '';
+      if (book.type === 'openings') {
+        if (parts[2] === 'cap') res = await viewChapter(app, book, Number(parts[3]), params);
+        else if (parts[2] === 'explorador') res = await viewExplorer(app, book, params);
+        else if (parts[2] === 'eco') res = await viewEcoIndex(app, book);
+        else res = await viewOpeningBook(app, book);
+      } else res = await viewBook(parts[1]);
+    } else if (parts[0] === 'analisis') res = await viewAnalysis(params);
+    else res = await viewLibrary();
+    if (typeof res === 'function') {
+      if (my === routeId) cleanup = res; else res();
+    }
+  } catch (e) {
+    if (my !== routeId) return;
+    app.innerHTML = '';
+    if (e && e.auth) return viewLogin('Tu sesión ha caducado. Vuelve a entrar.');
+    console.error(e);
+    app.append(h('div', { class: 'error-box' }, h('h2', {}, 'No se pudo cargar'), h('p', {}, String(e.message || e)), h('a', { class: 'btn', href: '#/' }, 'Volver a la biblioteca')));
+  }
+}
+
+function updateNav() {
+  const nav = document.querySelector('.nav');
+  let out = nav.querySelector('.logout');
+  if (isLoggedIn() && !out) {
+    out = h('a', { class: 'logout', href: '#/', onclick: (e) => { e.preventDefault(); logout(); cache.books = {}; cache.games = {}; route(); } }, 'Salir');
+    nav.append(out);
+  } else if (!isLoggedIn() && out) out.remove();
+  nav.querySelectorAll('a:not(.logout)').forEach((a) => a.classList.toggle('hidden', !isLoggedIn()));
+}
+
+// ---------- acceso privado ----------
+function viewLogin(msg) {
+  const user = h('input', { class: 'search', name: 'username', autocomplete: 'username', placeholder: 'Usuario', required: 'required' });
+  const pass = h('input', { class: 'search', type: 'password', name: 'password', autocomplete: 'current-password', placeholder: 'Contraseña', required: 'required' });
+  const remember = h('input', { type: 'checkbox' });
+  const err = h('p', { class: 'login-err' }, msg || '');
+  const btn = h('button', { class: 'btn primary', type: 'submit' }, 'Entrar');
+  const form = h('form', { class: 'login-box', onsubmit: async (e) => {
+    e.preventDefault();
+    btn.disabled = true; btn.textContent = 'Comprobando…'; err.textContent = '';
+    let ok = false;
+    try { ok = await login(user.value, pass.value, remember.checked); } catch (e2) { err.textContent = 'Error: ' + e2.message; }
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (ok) route();
+    else if (!err.textContent) { err.textContent = 'Usuario o contraseña incorrectos.'; pass.select(); }
+  } },
+  h('div', { class: 'logo big' }, '♞'),
+  h('h1', {}, 'Chess Coach'),
+  h('p', { class: 'muted' }, 'Contenido privado. Los libros están cifrados y sólo se abren con tu usuario y contraseña.'),
+  user, pass,
+  h('label', { class: 'row' }, remember, ' Recordarme en este dispositivo'),
+  btn, err);
+  app.append(form);
+  user.focus();
 }
 
 // ---------- biblioteca ----------
@@ -84,7 +141,7 @@ async function viewLibrary() {
   app.append(
     h('section', { class: 'hero' },
       h('h1', {}, 'Chess Coach'),
-      h('p', {}, 'Estudia partidas comentadas de los grandes libros de ajedrez: revisa cada jugada con las anotaciones del autor, entrena jugando las jugadas del libro y analiza cualquier posición con Stockfish.')),
+      h('p', {}, 'Estudia los grandes libros de ajedrez: partidas comentadas jugada a jugada, aperturas con su árbol de variantes y explicaciones, explorador por posición, entrenador y análisis con Stockfish.')),
     h('h2', { class: 'section-title' }, 'Capítulos'),
     h('div', { class: 'cards' }, lib.books.map((b, i) =>
       h('a', { class: 'card', href: `#/libro/${b.id}` },
@@ -92,6 +149,7 @@ async function viewLibrary() {
         h('div', { class: 'card-title' }, b.title),
         h('div', { class: 'card-sub' }, b.author),
         h('div', { class: 'card-meta' }, b.description || '')))),
+    h('div', { class: 'fco-actions lib-tools' }, h('a', { class: 'btn', href: '#/libro/fco/explorador' }, '🔎 Explorador de aperturas (FCO)'), h('a', { class: 'btn', href: '#/analisis' }, '♟ Análisis libre')),
   );
 }
 
@@ -126,85 +184,6 @@ async function viewBook(id) {
     filter, list);
 }
 
-// ---------- panel del motor (compartido) ----------
-function enginePanel(getFen, board, { autoStart = false, onLineClick } = {}) {
-  const enabled = { v: store.get('engineOn', autoStart) };
-  const toggle = h('input', { type: 'checkbox', id: 'engine-toggle' });
-  toggle.checked = enabled.v;
-  const depthSel = h('select', { class: 'mini' }, [16, 20, 24, 30].map((d) => h('option', { value: d }, `prof. ${d}`)));
-  depthSel.value = String(store.get('engineDepth', 20));
-  const status = h('span', { class: 'engine-status' }, '');
-  const lines = h('div', { class: 'engine-lines' });
-  const bar = document.querySelector('.evalbar .fill');
-  const barText = document.querySelector('.evalbar .txt');
-  let shownFen = null;
-
-  const run = () => {
-    if (!enabled.v) { lines.innerHTML = ''; status.textContent = 'apagado'; board.shapes([]); setBar(null); return; }
-    const fen = getFen();
-    if (!fen) return;
-    shownFen = fen;
-    const c = new Chess(fen);
-    if (c.isGameOver()) {
-      lines.innerHTML = '';
-      status.textContent = c.isCheckmate() ? 'jaque mate' : 'tablas';
-      setBar(c.isCheckmate() ? { mate: c.turn() === 'w' ? -0 : 0, cp: c.turn() === 'w' ? -10000 : 10000 } : { cp: 0 });
-      return;
-    }
-    status.textContent = engine.ready ? 'analizando…' : 'cargando motor…';
-    engine.analyse(fen, {
-      depth: Number(depthSel.value),
-      onInfo: ({ depth, lines: ls }) => {
-        if (fen !== shownFen) return;
-        status.textContent = `Stockfish 17.1 · profundidad ${depth}`;
-        lines.innerHTML = '';
-        for (const l of ls) {
-          const san = uciToSanLine(fen, l.pv, 10);
-          const row = h('div', { class: 'eline' },
-            h('span', { class: 'escore ' + ((l.mate ?? l.cp) >= 0 ? 'pos' : 'neg') }, formatScore(l)),
-            h('span', { class: 'epv' }, san.map((m, k) => (m.ply % 2 === 0 ? `${m.ply / 2 + 1}.` : (k === 0 ? `${(m.ply + 1) / 2}…` : '')) + figurine(m.san)).join(' ')));
-          if (onLineClick) row.addEventListener('click', () => onLineClick(fen, l.pv));
-          lines.append(row);
-        }
-        if (ls[0]) {
-          setBar(ls[0]);
-          const best = ls[0].pv[0];
-          if (best) board.shapes([{ orig: best.slice(0, 2), dest: best.slice(2, 4), brush: 'paleBlue' }]);
-        }
-      },
-      onBest: (best) => { if (best && fen === shownFen) status.textContent = status.textContent.replace('profundidad', 'terminado · prof.'); },
-      onError: () => {
-        if (fen !== shownFen) return;
-        status.innerHTML = '';
-        status.append('No se pudo cargar el motor. ', h('button', { class: 'btn small', onclick: () => run() }, 'Reintentar'));
-      },
-    });
-  };
-  function setBar(line) {
-    const evb = document.querySelector('.evalbar');
-    if (!evb) return;
-    evb.classList.toggle('off', !line);
-    const fill = evb.querySelector('.fill');
-    const txt = evb.querySelector('.txt');
-    if (!line) { fill.style.height = '50%'; txt.textContent = ''; return; }
-    fill.style.height = scoreToBar(line) + '%';
-    txt.textContent = formatScore(line).replace('+', '');
-  }
-  toggle.addEventListener('change', () => { enabled.v = toggle.checked; store.set('engineOn', enabled.v); if (!enabled.v) engine.stop(); run(); });
-  depthSel.addEventListener('change', () => { store.set('engineDepth', Number(depthSel.value)); run(); });
-  const el = h('div', { class: 'engine' },
-    h('div', { class: 'engine-head' },
-      h('label', { class: 'switch' }, toggle, h('span', {}, 'Stockfish')), depthSel, status),
-    lines);
-  return { el, run, enabled, setEnabled(v) { toggle.checked = v; enabled.v = v; run(); } };
-}
-
-function boardShell() {
-  const evalbar = h('div', { class: 'evalbar off' }, h('div', { class: 'fill' }), h('div', { class: 'txt' }));
-  const boardEl = h('div', { class: 'cg-board-wrap' });
-  const shell = h('div', { class: 'board-shell' }, evalbar, h('div', { class: 'board-box' }, boardEl));
-  return { shell, boardEl };
-}
 
 // ---------- partida (revisión + entrenador) ----------
 async function viewGame(bookId, n, params) {
@@ -233,7 +212,12 @@ async function viewGame(bookId, n, params) {
   // ---- cabecera
   const title = h('div', { class: 'game-title' },
     h('div', { class: 'gt-players' }, `${hd.White} – ${hd.Black}`, h('span', { class: 'gt-result' }, hd.Result)),
-    h('div', { class: 'gt-meta' }, [eventLabel(hd), hd.Site && hd.Site !== '?' ? hd.Site : '', hd.Opening].filter(Boolean).join(' · ')));
+    h('div', { class: 'gt-meta' }, [eventLabel(hd), hd.Site && hd.Site !== '?' ? hd.Site : '', hd.Opening].filter(Boolean).join(' · ')),
+    h('div', { class: 'gt-meta eco-line' }));
+  loadEco().then((eco) => {
+    const c = classifyLine(eco, fensBefore);
+    if (c) title.querySelector('.eco-line').textContent = `ECO ${c.eco} · ${c.name}`;
+  });
   const prevGame = n > 0 ? h('a', { class: 'btn ghost', title: 'Partida anterior', href: `#/libro/${bookId}/partida/${n - 1}` }, '←', h('span', { class: 'lbl-long' }, ' Anterior')) : null;
   const nextGame = n < book.games.length - 1 ? h('a', { class: 'btn ghost', title: 'Partida siguiente', href: `#/libro/${bookId}/partida/${n + 1}` }, h('span', { class: 'lbl-long' }, 'Siguiente '), '→') : null;
 
@@ -244,7 +228,8 @@ async function viewGame(bookId, n, params) {
     h('button', { class: 'btn icon navbtn', title: 'Adelante (→)', onclick: () => nav(1) }, '▶'),
     h('button', { class: 'btn icon navbtn', title: 'Final', onclick: () => nav('end') }, '⏭'),
     h('button', { class: 'btn icon', title: 'Girar tablero (F)', onclick: () => board.flip() }, '⇅'),
-    h('button', { class: 'btn analyse-btn', title: 'Mover piezas libremente desde aquí con Stockfish', onclick: () => startExplore() }, h('span', { class: 'long' }, 'Analizar posición'), h('span', { class: 'short' }, 'Analizar')));
+    h('button', { class: 'btn analyse-btn', title: 'Mover piezas libremente desde aquí con Stockfish', onclick: () => startExplore() }, h('span', { class: 'long' }, 'Analizar posición'), h('span', { class: 'short' }, 'Analizar')),
+    h('button', { class: 'btn fco-btn', title: 'Buscar esta posición en Fundamental Chess Openings', onclick: () => openInFco(currentFen()) }, 'FCO'));
   const nowComment = h('div', { class: 'now-comment hidden' });
   const banner = h('div', { class: 'banner hidden' });
 
@@ -608,10 +593,20 @@ async function viewGame(bookId, n, params) {
   if (game.errors.length) console.warn('Errores PGN', game.errors);
 }
 
-function scrollIntoViewIfNeeded(container, el) {
-  const c = container.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
-  if (r.top < c.top + 10 || r.bottom > c.bottom - 10) container.scrollTop += r.top - c.top - c.height / 3;
+
+// Busca una posición en el libro de aperturas y abre el explorador allí.
+async function openInFco(fen) {
+  const note = h('div', { class: 'toast' }, 'Buscando la posición en FCO…');
+  document.body.append(note);
+  try {
+    const book = await loadBook('fco');
+    const n = book.op.findFen(fen);
+    if (n >= 0) { location.hash = `#/libro/fco/explorador?n=${n}`; note.remove(); return; }
+    note.textContent = 'Esta posición no aparece en Fundamental Chess Openings.';
+  } catch (e) {
+    note.textContent = e.auth ? 'Inicia sesión de nuevo.' : 'No se pudo abrir FCO.';
+  }
+  setTimeout(() => note.remove(), 3500);
 }
 
 // ---------- análisis libre ----------
@@ -643,7 +638,8 @@ function viewAnalysis(params) {
         h('button', { class: 'btn', onclick: () => { chess.undo(); render(); } }, 'Deshacer'),
         h('button', { class: 'btn', onclick: () => { chess.load(base); render(); } }, 'Reiniciar'),
         h('button', { class: 'btn', onclick: () => { chess.reset(); base = chess.fen(); render(); } }, 'Posición inicial'),
-        h('button', { class: 'btn icon', onclick: () => board.flip() }, '⇅'), promo)),
+        h('button', { class: 'btn icon', onclick: () => board.flip() }, '⇅'), promo,
+        h('button', { class: 'btn fco-btn', title: 'Buscar esta posición en Fundamental Chess Openings', onclick: () => openInFco(chess.fen()) }, 'FCO'))),
       h('div', { class: 'side' },
         h('h3', {}, 'Análisis con Stockfish'),
         h('label', { class: 'lbl' }, 'FEN'),
@@ -652,3 +648,5 @@ function viewAnalysis(params) {
   cleanup = () => board.destroy();
   render();
 }
+
+route();

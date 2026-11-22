@@ -1,0 +1,11 @@
+{
+  "_doc": "Correcciones manuales comprobadas contra los diagramas del libro. start: posición de partida (jugadas desde el inicio) de una secuencia del texto. diag_skip: marcas (D) sin imagen en la edición Kindle (índice dentro del párrafo).",
+  "start": {
+    "part0000_split_023.html#146": {"8...0-0": "c4 e5 Nc3 Nf6 Nf3 Nc6 g3 d5 cxd5 Nxd5 Bg2 Nb6 O-O Be7 a3"},
+    "part0000_split_036.html#205": {"13 Kb1": "e4 c6 d4 d5 Nc3 dxe4 Nxe4 Bf5 Ng3 Bg6 h4 h6 Nf3 Nd7 h5 Bh7 Bd3 Bxd3 Qxd3 e6 Bf4 Ngf6 O-O-O Be7"},
+    "part0000_split_038.html#450": {"8 e5": "e4 c5 Nf3 d6 d4 cxd4 Nxd4 Nf6 Nc3 a6 Bg5 e6 f4 b5"}
+  },
+  "diag_skip": {
+    "part0000_split_026.html#138": [0]
+  }
+}

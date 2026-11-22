@@ -1,0 +1,9 @@
+{
+  "id": "fco",
+  "type": "openings",
+  "title": "Fundamental Chess Openings",
+  "author": "Paul van der Sterren",
+  "data": "book.json.enc",
+  "language": "en",
+  "note": "Texto completo del libro en inglés (edición Gambit, Kindle 2012), con todas las aperturas, variantes y explicaciones. Cada jugada está validada con las reglas y las 1.621 posiciones de los diagramas del libro se han comprobado una a una."
+}
