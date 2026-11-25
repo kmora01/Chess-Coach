@@ -1,0 +1,11 @@
+{
+  "id": "kaufman",
+  "type": "repertoire",
+  "title": "Kaufman's New Repertoire for Black and White",
+  "author": "Larry Kaufman",
+  "language": "en",
+  "pgn": "games.pgn",
+  "extra": "extra.json",
+  "numberedOnly": true,
+  "note": "Repertorio completo: 1.e4 con blancas (capítulos 1–8) y Grünfeld + 1…e5 con negras (capítulos 9–26). 187 partidas modelo con los comentarios del libro en inglés (New In Chess 2019), y los planes típicos de cada apertura explicados en español. Todas las jugadas están validadas con las reglas y las posiciones comprobadas contra los diagramas del libro."
+}

@@ -322,3 +322,34 @@ h3.fco-h { font-size: 16px; border-bottom: 1px solid var(--border); padding-bott
 }
 .tree-sub { margin: 18px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
 .tline.other { padding: 4px 0; border-top: 1px dotted var(--border); }
+
+/* ---------- libros de repertorio (Kaufman) ---------- */
+.rep-part { margin-bottom: 28px; }
+.rep-part .section-title .small { font-size: 14px; font-weight: 400; }
+.plan-box { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 6px 18px 10px; margin: 10px 0 16px; line-height: 1.6; box-shadow: var(--shadow); }
+.plan-box h3, .plan-box h4, .plan-box h5 { margin: 14px 0 4px; color: var(--accent); }
+.plan-box h4 { font-size: 16px; }
+.plan-box p { margin: 6px 0; }
+.plan-box ul { margin: 6px 0; padding-left: 22px; }
+.plan-box li { margin: 3px 0; }
+.plan-box .cm-move, .rep-content .cm-move { cursor: pointer; border-bottom: 1px dotted var(--accent-2); font-weight: 600; }
+.plan-box .cm-move:hover, .plan-box .cm-move.current, .rep-content .cm-move.current { background: var(--current); border-radius: 3px; }
+.plan-panel { padding: 8px 14px 14px; overflow-y: auto; max-height: 70vh; }
+.plan-panel .plan-box { box-shadow: none; }
+.plan-head { margin: 4px 0 2px; font-size: 14px; }
+.book-intro { margin: 8px 0 16px; }
+.book-intro summary { cursor: pointer; color: var(--accent); font-weight: 600; padding: 6px 0; }
+.book-intro p { font-family: Georgia, "Times New Roman", serif; line-height: 1.55; }
+.book-intro .comment { margin-left: 0; }
+.book-intro .diagram { margin: 8px 0 12px; max-width: 240px; }
+.rep-side { padding: 4px 18px 18px; }
+.rep-side h2 { margin: 14px 0 0; }
+.rep-side h3 { margin: 18px 0 6px; }
+.rep-caption { margin: 8px 2px; min-height: 22px; font-size: 14px; }
+.rep-op .pc { font-size: 15px; }
+.game-row .rep-op { font-weight: 600; color: var(--text); }
+.rep-content .game-row { grid-template-columns: 40px 1.3fr 1.5fr 44px 40px; padding: 8px 6px; }
+.rep-content .game-event { display: none; }
+.rep-content .game-list { border: 1px solid var(--border); border-radius: 10px; }
+@media (max-width: 760px) { .rep-content .game-row { grid-template-columns: 40px 1fr 44px; } .rep-content .game-players, .rep-content .game-progress { display: none; } }
+@media (max-width: 760px) { .rep-row .game-opening { display: block; font-size: 14px; } .rep-row .game-players { display: none; } }

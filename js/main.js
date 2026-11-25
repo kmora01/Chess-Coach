@@ -8,6 +8,7 @@ import { fetchSecret, isLoggedIn, login, logout, AuthError } from './auth.js';
 import { OpeningBook } from './opbook.js';
 import { viewOpeningBook, viewChapter, viewExplorer, viewEcoIndex, prepareOpeningBook } from './openings.js';
 import { loadEco, classifyLine } from './eco.js';
+import { viewRepBook, viewRepChapter, renderPlan } from './repertoire.js';
 
 const app = document.getElementById('app');
 const cache = { library: null, books: {}, games: {} };
@@ -34,7 +35,8 @@ async function loadBook(id) {
   }
   const pgnText = await fetchSecret(`books/${id}/${meta.pgn || 'games.pgn'}.enc`);
   const games = splitGames(pgnText).map((t, i) => ({ index: i, text: t, headers: parseHeaders(t) }));
-  cache.books[id] = { ...entry, ...meta, games };
+  const extra = meta.extra ? JSON.parse(await fetchSecret(`books/${id}/${meta.extra}.enc`)) : null;
+  cache.books[id] = { ...entry, ...meta, games, extra };
   return cache.books[id];
 }
 function parseHeaders(t) {
@@ -84,6 +86,9 @@ async function route() {
         else if (parts[2] === 'explorador') res = await viewExplorer(app, book, params);
         else if (parts[2] === 'eco') res = await viewEcoIndex(app, book);
         else res = await viewOpeningBook(app, book);
+      } else if (book.type === 'repertoire') {
+        if (parts[2] === 'cap') res = viewRepChapter(app, book, Number(parts[3]));
+        else res = viewRepBook(app, book);
       } else res = await viewBook(parts[1]);
     } else if (parts[0] === 'analisis') res = await viewAnalysis(params);
     else res = await viewLibrary();
@@ -190,6 +195,9 @@ async function viewGame(bookId, n, params) {
   const book = await loadBook(bookId);
   const game = getGame(book, n);
   const hd = game.headers;
+  const rep = book.type === 'repertoire' ? (hd.Repertoire === 'Black' ? 'black' : 'white') : null;
+  const repCh = rep ? book.extra.chapters.find((c) => String(c.num) === hd.Chapter) : null;
+  const copts = { numberedOnly: !!book.numberedOnly };
   const moves = mainline(game.root);
   const fensBefore = [game.root.fen, ...moves.map((m) => m.fen)];
   const startPly = game.root.ply;
@@ -236,12 +244,14 @@ async function viewGame(bookId, n, params) {
   // ---- pestañas
   const tabReview = h('button', { class: 'tab', onclick: () => setMode('review') }, 'Revisión');
   const tabTrain = h('button', { class: 'tab', onclick: () => setMode('train') }, 'Entrenador');
+  const tabPlan = rep ? h('button', { class: 'tab', onclick: () => setMode('plan') }, 'Planes') : null;
   const panelReview = h('div', { class: 'panel' });
   const panelTrain = h('div', { class: 'panel' });
+  const panelPlan = h('div', { class: 'panel plan-panel' });
 
   // ---- lista de jugadas con comentarios
   const moveList = h('div', { class: 'movelist' });
-  const intro = game.root.comment ? h('div', { class: 'comment intro', html: renderComment(game.root.comment, fensByPly, startPly, commentRegistry) }) : null;
+  const intro = game.root.comment ? h('div', { class: 'comment intro', html: renderComment(game.root.comment, fensByPly, startPly, commentRegistry, copts) }) : null;
   if (intro) moveList.append(intro);
   const moveEls = [];
   const commentEls = [];
@@ -260,7 +270,7 @@ async function viewGame(bookId, n, params) {
     const vars = m.variations || [];
     if (m.comment || vars.length) {
       const c = h('div', { class: 'comment' });
-      if (m.comment) c.innerHTML = renderComment(m.comment, fensByPly, m.ply, commentRegistry);
+      if (m.comment) c.innerHTML = renderComment(m.comment, fensByPly, m.ply, commentRegistry, copts);
       c.addEventListener('click', (e) => { if (!e.target.closest('.cm-move')) go(i + 1); });
       commentEls[i] = c;
       moveList.append(c);
@@ -282,17 +292,38 @@ async function viewGame(bookId, n, params) {
   const trainer = makeTrainer();
   panelTrain.append(trainer.el);
 
+  // ---- planes típicos (libros de repertorio): plan de esta línea + enlace a los del capítulo
+  if (rep) {
+    const gp = book.extra.games[hd.Round]?.plan;
+    panelPlan.append(
+      h('div', { class: 'plan-head' }, h('b', {}, `${rep === 'white' ? '♔ Repertorio con blancas' : '♚ Repertorio con negras'}`),
+        repCh ? h('span', {}, ' · ', h('a', { href: `#/libro/${bookId}/cap/${repCh.num}` }, `Capítulo ${repCh.num}: ${repCh.title}`)) : null),
+      gp ? h('div', { class: 'plan-box', html: renderPlan(gp, fensByPly, commentRegistry, startPly) })
+        : h('p', { class: 'muted' }, 'Los planes de esta línea están en la página del capítulo.'),
+      h('p', { class: 'muted small' }, 'Pulsa las jugadas para verlas en el tablero. Los planes de todas las líneas del capítulo están en la página del capítulo.'));
+    panelPlan.addEventListener('click', (e) => {
+      const t = e.target.closest('.cm-move');
+      if (!t) return;
+      e.stopPropagation();
+      const v = commentRegistry[Number(t.dataset.var)];
+      board.set(v.fen, { lastMove: [v.from, v.to], interactive: false });
+      panelPlan.querySelectorAll('.cm-move.current').forEach((x) => x.classList.remove('current'));
+      t.classList.add('current');
+    });
+  }
+
   const side = h('div', { class: 'side' },
-    h('div', { class: 'tabs' }, tabReview, tabTrain),
-    panelReview, panelTrain, eng.el);
+    h('div', { class: 'tabs' }, tabReview, tabTrain, tabPlan),
+    panelReview, panelTrain, panelPlan, eng.el);
   app.append(
-    h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Biblioteca'), ' / ', h('a', { href: `#/libro/${bookId}` }, book.title), ' / ', `Partida ${hd.Round || n + 1}`),
+    h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Biblioteca'), ' / ', h('a', { href: `#/libro/${bookId}` }, book.title), ' / ',
+      repCh ? h('a', { href: `#/libro/${bookId}/cap/${repCh.num}` }, `Capítulo ${repCh.num}`) : null, repCh ? ' / ' : null, `Partida ${hd.Round || n + 1}`),
     h('div', { class: 'game-top' }, title, h('div', { class: 'game-nav' }, prevGame, nextGame)),
     h('div', { class: 'game-layout' }, h('div', { class: 'main' }, shell, banner, nowComment, ctrl), side));
 
   // ---- lógica
   function go(i) {
-    if (mode === 'train') return;
+    if (mode !== 'review') return;
     i = Math.max(0, Math.min(moves.length, i));
     idx = i;
     explore = null;
@@ -301,7 +332,7 @@ async function viewGame(bookId, n, params) {
   }
   // Navegación: dentro de una variante del libro recorre la variante; si no, la partida.
   function nav(d) {
-    if (mode === 'train') return;
+    if (mode !== 'review') return;
     if (preview != null && !explore) {
       const seq = commentRegistry[preview].seq;
       const pos = seq.indexOf(preview);
@@ -393,19 +424,24 @@ async function viewGame(bookId, n, params) {
     if (mode === 'train') trainer.userMove(m);
   }
   function setMode(m) {
+    const wasTrain = mode === 'train';
     mode = m;
     tabReview.classList.toggle('active', m === 'review');
     tabTrain.classList.toggle('active', m === 'train');
+    if (tabPlan) tabPlan.classList.toggle('active', m === 'plan');
     panelReview.classList.toggle('hidden', m !== 'review');
     panelTrain.classList.toggle('hidden', m !== 'train');
-    ctrl.querySelectorAll('.navbtn').forEach((b) => b.classList.toggle('hidden', m === 'train'));
+    panelPlan.classList.toggle('hidden', m !== 'plan');
+    ctrl.querySelectorAll('.navbtn').forEach((b) => b.classList.toggle('hidden', m !== 'review'));
     explore = null; preview = null;
-    if (m === 'train') trainer.enter(); else { trainer.leave(); render(); }
+    if (m === 'train') trainer.enter();
+    else if (m === 'plan') { if (wasTrain) trainer.leave(); if (rep) board.orient(rep); board.set(fensBefore[idx], { lastMove: moves[idx - 1] ? [moves[idx - 1].from, moves[idx - 1].to] : null, interactive: false }); nowComment.classList.add('hidden'); }
+    else { trainer.leave(); if (rep) board.orient(rep); render(); }
   }
 
   function makeTrainer() {
-    const defaultColor = /fischer/i.test(hd.White) ? 'white' : /fischer/i.test(hd.Black) ? 'black' : 'white';
-    const hero = book.hero || 'Fischer';
+    const defaultColor = rep || (/fischer/i.test(hd.White) ? 'white' : /fischer/i.test(hd.Black) ? 'black' : 'white');
+    const hero = rep ? 'el repertorio' : book.hero || 'Fischer';
     let color = defaultColor;
     let ply = 0; // jugadas ya jugadas en el entrenamiento
     let active = false;
@@ -482,13 +518,13 @@ async function viewGame(bookId, n, params) {
       const userTurn = turnColor(ply) === color;
       status.innerHTML = '';
       status.append(
-        h('div', { class: 'ts-turn' }, userTurn ? `Tu turno (jugada ${mvNo}): ¿qué jugó ${color === defaultColor ? hero : 'el libro'}?` : 'El rival piensa…'),
+        h('div', { class: 'ts-turn' }, userTurn ? `Tu turno (jugada ${mvNo}): ¿qué ${rep && color === defaultColor ? 'recomienda' : 'jugó'} ${color === defaultColor ? hero : 'el libro'}?` : 'El rival piensa…'),
         h('div', { class: 'ts-score' }, `✔ ${stats.ok}  ✘ ${stats.fail}  · ${stats.total ? Math.round((100 * stats.ok) / stats.total) : 0}% al primer intento`));
     }
     function addFeed(m, mine, extra) {
       const item = h('div', { class: 'feed-item' + (mine ? ' mine' : '') },
         h('div', { class: 'feed-move' }, `${moveNumberLabel(m).replace('...', '…')} ${figurine(m.san)}${m.nags.map(nagToSymbol).join('')}`, extra ? h('span', { class: 'feed-extra' }, extra) : null));
-      if (m.comment) item.append(h('div', { class: 'comment', html: renderComment(m.comment, fensByPly, m.ply, commentRegistry) }));
+      if (m.comment) item.append(h('div', { class: 'comment', html: renderComment(m.comment, fensByPly, m.ply, commentRegistry, copts) }));
       feed.prepend(item);
     }
     async function userMove({ from, to, promotion }) {
@@ -567,7 +603,7 @@ async function viewGame(bookId, n, params) {
     return {
       el, userMove,
       enter() { if (!active) { setup.classList.remove('hidden'); live.classList.add('hidden'); board.set(fensBefore[0], { interactive: false }); board.orient(color); } else step(); },
-      leave() { active = false; board.orient('white'); resetSetup(); },
+      leave() { active = false; board.orient(rep || 'white'); resetSetup(); },
       pause() { },
       resume() { if (active) step(); else board.set(fensBefore[0], { interactive: false }); },
       previewing() { feedback.className = 'train-feedback'; feedback.innerHTML = ''; feedback.append('Mostrando una variante del comentario. ', h('button', { class: 'btn small', onclick: () => step() }, 'Volver al entrenamiento')); },
@@ -587,7 +623,7 @@ async function viewGame(bookId, n, params) {
   window.addEventListener('keydown', onKey);
   cleanup = () => { window.removeEventListener('keydown', onKey); board.destroy(); };
 
-  if (/fischer/i.test(hd.Black) && mode === 'review') board.orient('black');
+  if ((rep === 'black' || (!rep && /fischer/i.test(hd.Black))) && mode === 'review') board.orient('black');
   setMode(mode);
   if (mode === 'review') go(idx);
   if (game.errors.length) console.warn('Errores PGN', game.errors);
