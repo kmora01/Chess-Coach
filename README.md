@@ -30,6 +30,11 @@ iteraciones) y nunca se envía a ningún sitio; sin la contraseña los archivos 
   **explorador por posición** (reúne transposiciones y dice en qué capítulos se trata cada posición),
   **índice ECO**, buscador por nombre o jugadas y **entrenador de repertorio** (juegas un bando y la
   aplicación responde con líneas del libro).
+- **Libros de repertorio** (*Kaufman's New Repertoire for Black and White*): las 187 partidas
+  comentadas del libro, organizadas por capítulo y por bando (1.e4 con blancas; Grünfeld y 1…e5 con
+  negras). Cada capítulo y cada partida tiene **planes típicos en español** (idea general, plan
+  blanco, plan negro, momento clave) con las jugadas enlazadas al tablero; la pestaña *Planes* de cada
+  partida los muestra, y el entrenador propone por defecto el color del repertorio.
 - **Botón FCO**: desde cualquier partida o desde el análisis libre abre esa posición en el libro de aperturas.
 - **Análisis con Stockfish 17.1**: en cualquier momento puedes activar el motor (barra de
   evaluación, 3 mejores líneas y flecha con la mejor jugada) o pulsar *Analizar posición* para
@@ -77,6 +82,20 @@ El EPUB trae el texto real (sin OCR). `tools/fco/build_all.sh <epub> <usuario> <
 5. `tests/verify_fco.mjs` repite la validación con el mismo código de la web (chess.js).
 
 `overrides-fco.json` guarda las pocas correcciones manuales, todas comprobadas contra su diagrama.
+
+## Cómo se preparó el repertorio de Kaufman
+
+`tools/kaufman/build_all.sh <epub> <usuario> <contraseña>` regenera todo desde el EPUB:
+
+1. `parse_kaufman.py` lee los 26 capítulos y reconstruye las 187 partidas (13.062 jugadas de línea
+   principal, todas validadas con python-chess; 0 errores). Los comentarios conservan las variantes.
+2. `check_diagrams.py` lee los diagramas del libro casilla a casilla: 670 de 679 diagramas de línea
+   principal coinciden con la posición reconstruida (los 9 restantes son diagramas de variantes).
+3. Los planes en español están en `books/kaufman/planes.md.enc` (cifrado); `planes.py` los convierte
+   y `build_kaufman.py` arma `games.pgn` y `extra.json` (introducciones, diagramas y planes).
+4. `tests/verify_kaufman.mjs` repite la validación con el código de la web: PGN legal, diagramas, y
+   que **cada jugada numerada de los planes** (2.846) sea legal en su contexto.
+5. El resultado se cifra (`games.pgn.enc`, `extra.json.enc`); el texto en claro nunca va al repositorio.
 
 ## Añadir un libro nuevo (capítulo)
 

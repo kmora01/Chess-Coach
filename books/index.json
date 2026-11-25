@@ -11,6 +11,12 @@
       "title": "Fundamental Chess Openings",
       "author": "Paul van der Sterren",
       "description": "Todas las aperturas explicadas: árbol de variantes navegable, explorador por posición, índice ECO y entrenador de repertorio."
+    },
+    {
+      "id": "kaufman",
+      "title": "Kaufman's New Repertoire for Black and White",
+      "author": "Larry Kaufman",
+      "description": "Repertorio completo para blancas (1.e4) y negras (Grünfeld y 1…e5): 187 partidas modelo, planes típicos de cada apertura en español, revisión y entrenador."
     }
   ]
 }

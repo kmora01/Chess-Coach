@@ -4,7 +4,7 @@
 import { Chess } from '../vendor/chess.js';
 
 const FIG = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };
-const MOVE_RE = /^(O-O-O|O-O|0-0-0|0-0|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=?[QRBN])?[+#]?)([!?]{0,2})/;
+const MOVE_RE = /^(O-O-O|O-O|0-0-0|0-0|[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=?[QRBN])?[+#]?)([!?]{0,2}(?:N(?![a-hx1-8]))?)/; // N = novedad
 const NUM_RE = /^(\d{1,3})(\s*(?:\.\.\.|…)\s*|\.\s*|\s+)(?=[KQRBNO0a-h])/;
 
 export function figurine(san) {
@@ -15,13 +15,41 @@ function escapeHtml(s) {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
+// Cuenta cuántas jugadas legales seguidas hay en el texto a partir de pos (para elegir bien desde
+// qué posición empieza una variante cuando hay varias candidatas).
+function scanLen(chess, ply, pos, text = scanLen.text) {
+  const c = new Chess(chess.fen());
+  let n = 0;
+  let j = pos;
+  for (let guard = 0; guard < 60; guard++) {
+    while (j < text.length && /[\s!?+\-–=±∓⩲⩱∞]/.test(text[j])) j++;
+    let rest = text.slice(j);
+    const nm = NUM_RE.exec(rest);
+    if (nm) {
+      const pl = 2 * (Number(nm[1]) - 1) + (/\.\.\.|…/.test(nm[2]) ? 1 : 0);
+      if (pl !== ply) break;
+      j += nm[0].length; rest = text.slice(j);
+    }
+    const mm = MOVE_RE.exec(rest);
+    if (!mm || /[A-Za-z0-9]/.test(rest[mm[0].length] || ' ')) break;
+    try { if (!c.move(mm[1].replace(/^0-0-0/, 'O-O-O').replace(/^0-0/, 'O-O'), { strict: false })) break; } catch { break; }
+    n++; ply++; j += mm[0].length;
+  }
+  return n;
+}
+
 // fensBefore[p] = FEN antes de la jugada número p (ply contado desde 0) en la línea principal
-export function renderComment(text, fensBefore, contextPly, registry) {
+// opts.numberedOnly: sólo empieza una variante en una jugada con número (libros que siempre numeran
+//   sus variantes, como Kaufman); así las jugadas sueltas del texto ("planea …Bg7") no se enlazan.
+// Los paréntesis se respetan: al cerrar uno, las variantes abiertas dentro dejan de ser candidatas
+// y se vuelve a la secuencia que había antes de abrirlo.
+export function renderComment(text, fensBefore, contextPly, registry, opts = {}) {
   let out = '';
   let i = 0;
   let run = null; // { fens: {ply: fenBefore}, chess, ply }
-  const runs = [];
-  let lastWasWord = false;
+  let runs = [];
+  const stack = []; // paréntesis abiertos: { run, nRuns }
+  scanLen.text = text;
 
   const tryStart = (ply) => {
     const candidates = [];
@@ -69,7 +97,14 @@ export function renderComment(text, fensBefore, contextPly, registry) {
           // continuar la secuencia actual si el número encaja
           if (run && run.ply === ply) res = playOn(run.chess.fen(), mm[1]);
           if (!res) {
-            for (const fen of tryStart(ply)) { res = playOn(fen, mm[1]); if (res) break; }
+            // de las posiciones candidatas, la que permite leer más jugadas seguidas
+            let best = -1;
+            for (const fen of tryStart(ply)) {
+              const r = playOn(fen, mm[1]);
+              if (!r) continue;
+              const len = scanLen(r.c, ply + 1, i + nm[0].length + mm[0].length);
+              if (len > best) { best = len; res = r; }
+            }
             if (res) {
               run = { start: ply, fens: {}, ply, chess: null };
               runs.push(run);
@@ -98,7 +133,7 @@ export function renderComment(text, fensBefore, contextPly, registry) {
           continue;
         }
         // jugada suelta sin número: alternativa a la jugada comentada o continuación
-        if (!run && /[KQRBNx]/.test(mm[1]) || (!run && /^[a-h][1-8]/.test(mm[1]))) {
+        if (!opts.numberedOnly && (!run && /[KQRBNx]/.test(mm[1]) || (!run && /^[a-h][1-8]/.test(mm[1])))) {
           for (const ply of [contextPly - 1, contextPly]) {
             if (!fensBefore[ply]) continue;
             res = playOn(fensBefore[ply], mm[1]);
@@ -116,8 +151,14 @@ export function renderComment(text, fensBefore, contextPly, registry) {
     }
     // texto normal; un punto, punto y coma o cierre de frase corta la secuencia
     const ch = text[i];
-    if (/[;:]/.test(ch) || (ch === '.' && text[i - 1] !== '.' && text[i + 1] !== '.')) {
+    if (/[;:]/.test(ch) || (ch === '.' && text[i - 1] !== '.' && text[i + 1] !== '.') || (ch === '–' && text[i - 1] === ' ' && text[i + 1] === ' ')) {
       run = null;
+    } else if (ch === '(' || ch === '[') {
+      stack.push({ run, nRuns: runs.length });
+    } else if ((ch === ')' || ch === ']') && stack.length) {
+      const st = stack.pop();
+      runs = runs.slice(0, st.nRuns);
+      run = st.run;
     }
     out += escapeHtml(ch);
     i++;

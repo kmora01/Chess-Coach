@@ -3,3 +3,4 @@ private/
 *.plain.*
 tools/__pycache__/
 tools/fco/__pycache__/
+tools/kaufman/__pycache__/
