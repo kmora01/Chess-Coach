@@ -1,0 +1,11 @@
+{
+  "id": "sokolov",
+  "type": "structures",
+  "title": "Winning Chess Middlegames",
+  "author": "Ivan Sokolov",
+  "language": "en",
+  "pgn": "games.pgn",
+  "extra": "extra.json",
+  "numberedOnly": true,
+  "note": "Guía de las estructuras de peones del medio juego: peones doblados, peón aislado, peones colgantes y mayoría central. 33 estructuras con su esqueleto de peones y los planes de cada bando explicados en español, y 45 partidas modelo con los comentarios del libro en inglés (New In Chess, 2.ª ed. 2010). Todas las jugadas están validadas con las reglas y comprobadas contra los diagramas del libro."
+}

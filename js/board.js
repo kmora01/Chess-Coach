@@ -57,6 +57,16 @@ export class Board {
     this.cg.setAutoShapes(shapes);
   }
 
+  // Dibuja una colocación sin validarla (esqueletos de peones sin reyes, que chess.js no acepta).
+  setStatic(placement) {
+    if (this.destroyed) return;
+    this.interactive = false;
+    this.cg.set({ fen: placement.split(' ')[0], lastMove: undefined, check: false, movable: { color: undefined, dests: new Map() } });
+    this.cg.set({ lastMove: undefined });
+    this.baseShapes = [];
+    this.cg.setAutoShapes([]);
+  }
+
   // flechas extra (motor, pistas) que se suman a las de la posición (p. ej. las del libro)
   shapes(list) { if (!this.destroyed) this.cg.setAutoShapes([...(this.baseShapes || []), ...list]); }
   orient(color) { this.cg.set({ orientation: color }); }

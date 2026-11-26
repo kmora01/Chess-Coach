@@ -4,3 +4,4 @@ private/
 tools/__pycache__/
 tools/fco/__pycache__/
 tools/kaufman/__pycache__/
+tools/sokolov/__pycache__/
