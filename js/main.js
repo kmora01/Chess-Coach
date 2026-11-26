@@ -9,6 +9,7 @@ import { OpeningBook } from './opbook.js';
 import { viewOpeningBook, viewChapter, viewExplorer, viewEcoIndex, prepareOpeningBook } from './openings.js';
 import { loadEco, classifyLine } from './eco.js';
 import { viewRepBook, viewRepChapter, renderPlan } from './repertoire.js';
+import { viewStructBook, viewStructPage, structureOf } from './structures.js';
 
 const app = document.getElementById('app');
 const cache = { library: null, books: {}, games: {} };
@@ -89,6 +90,9 @@ async function route() {
       } else if (book.type === 'repertoire') {
         if (parts[2] === 'cap') res = viewRepChapter(app, book, Number(parts[3]));
         else res = viewRepBook(app, book);
+      } else if (book.type === 'structures') {
+        if (parts[2] === 'est') res = viewStructPage(app, book, parts[3]);
+        else res = viewStructBook(app, book);
       } else res = await viewBook(parts[1]);
     } else if (parts[0] === 'analisis') res = await viewAnalysis(params);
     else res = await viewLibrary();
@@ -195,8 +199,12 @@ async function viewGame(bookId, n, params) {
   const book = await loadBook(bookId);
   const game = getGame(book, n);
   const hd = game.headers;
-  const rep = book.type === 'repertoire' ? (hd.Repertoire === 'Black' ? 'black' : 'white') : null;
-  const repCh = rep ? book.extra.chapters.find((c) => String(c.num) === hd.Chapter) : null;
+  // Libros con planes en español: repertorio (Kaufman) o estructuras de peones (Sokolov). rep = color
+  // cuyo plan se estudia (orientación del tablero y color por defecto del entrenador).
+  const isStruct = book.type === 'structures';
+  const rep = book.type === 'repertoire' ? (hd.Repertoire === 'Black' ? 'black' : 'white') : isStruct ? (hd.Side === 'Black' ? 'black' : 'white') : null;
+  const repCh = book.type === 'repertoire' ? book.extra.chapters.find((c) => String(c.num) === hd.Chapter) : null;
+  const gSt = isStruct ? structureOf(book, hd.Structure) : null;
   const copts = { numberedOnly: !!book.numberedOnly };
   const moves = mainline(game.root);
   const fensBefore = [game.root.fen, ...moves.map((m) => m.fen)];
@@ -295,7 +303,16 @@ async function viewGame(bookId, n, params) {
   // ---- planes típicos (libros de repertorio): plan de esta línea + enlace a los del capítulo
   if (rep) {
     const gp = book.extra.games[hd.Round]?.plan;
-    panelPlan.append(
+    if (isStruct) {
+      const others = book.extra.structures.filter((s) => s !== gSt && s.games.includes(hd.Round));
+      panelPlan.append(
+        h('div', { class: 'plan-head' }, h('b', {}, 'Estructura'),
+          gSt ? h('span', {}, ' · ', h('a', { href: `#/libro/${bookId}/est/${gSt.id}` }, `${gSt.id}: ${gSt.title}`)) : null,
+          others.length ? h('span', { class: 'muted' }, ' · también: ', ...others.flatMap((s, i) => [i ? ', ' : '', h('a', { href: `#/libro/${bookId}/est/${s.id}` }, s.id)])) : null),
+        gp ? h('div', { class: 'plan-box', html: renderPlan(gp, fensByPly, commentRegistry, startPly) })
+          : h('p', { class: 'muted' }, 'Los planes de esta partida están en la página de la estructura.'),
+        h('p', { class: 'muted small' }, 'Pulsa las jugadas para verlas en el tablero. Los planes generales de la estructura están en su página.'));
+    } else panelPlan.append(
       h('div', { class: 'plan-head' }, h('b', {}, `${rep === 'white' ? '♔ Repertorio con blancas' : '♚ Repertorio con negras'}`),
         repCh ? h('span', {}, ' · ', h('a', { href: `#/libro/${bookId}/cap/${repCh.num}` }, `Capítulo ${repCh.num}: ${repCh.title}`)) : null),
       gp ? h('div', { class: 'plan-box', html: renderPlan(gp, fensByPly, commentRegistry, startPly) })
@@ -317,7 +334,8 @@ async function viewGame(bookId, n, params) {
     panelReview, panelTrain, panelPlan, eng.el);
   app.append(
     h('nav', { class: 'crumbs' }, h('a', { href: '#/' }, 'Biblioteca'), ' / ', h('a', { href: `#/libro/${bookId}` }, book.title), ' / ',
-      repCh ? h('a', { href: `#/libro/${bookId}/cap/${repCh.num}` }, `Capítulo ${repCh.num}`) : null, repCh ? ' / ' : null, `Partida ${hd.Round || n + 1}`),
+      repCh ? h('a', { href: `#/libro/${bookId}/cap/${repCh.num}` }, `Capítulo ${repCh.num}`) : null, repCh ? ' / ' : null,
+      gSt ? h('a', { href: `#/libro/${bookId}/est/${gSt.id}` }, `Estructura ${gSt.id}`) : null, gSt ? ' / ' : null, `Partida ${hd.Round || n + 1}`),
     h('div', { class: 'game-top' }, title, h('div', { class: 'game-nav' }, prevGame, nextGame)),
     h('div', { class: 'game-layout' }, h('div', { class: 'main' }, shell, banner, nowComment, ctrl), side));
 
@@ -441,7 +459,7 @@ async function viewGame(bookId, n, params) {
 
   function makeTrainer() {
     const defaultColor = rep || (/fischer/i.test(hd.White) ? 'white' : /fischer/i.test(hd.Black) ? 'black' : 'white');
-    const hero = rep ? 'el repertorio' : book.hero || 'Fischer';
+    const hero = isStruct ? (/sokolov/i.test(defaultColor === 'white' ? hd.White : hd.Black) ? 'Sokolov' : (defaultColor === 'white' ? hd.White : hd.Black).split(' ').pop()) : rep ? 'el repertorio' : book.hero || 'Fischer';
     let color = defaultColor;
     let ply = 0; // jugadas ya jugadas en el entrenamiento
     let active = false;
@@ -518,7 +536,7 @@ async function viewGame(bookId, n, params) {
       const userTurn = turnColor(ply) === color;
       status.innerHTML = '';
       status.append(
-        h('div', { class: 'ts-turn' }, userTurn ? `Tu turno (jugada ${mvNo}): ¿qué ${rep && color === defaultColor ? 'recomienda' : 'jugó'} ${color === defaultColor ? hero : 'el libro'}?` : 'El rival piensa…'),
+        h('div', { class: 'ts-turn' }, userTurn ? `Tu turno (jugada ${mvNo}): ¿qué ${rep && !isStruct && color === defaultColor ? 'recomienda' : 'jugó'} ${color === defaultColor ? hero : 'el libro'}?` : 'El rival piensa…'),
         h('div', { class: 'ts-score' }, `✔ ${stats.ok}  ✘ ${stats.fail}  · ${stats.total ? Math.round((100 * stats.ok) / stats.total) : 0}% al primer intento`));
     }
     function addFeed(m, mine, extra) {

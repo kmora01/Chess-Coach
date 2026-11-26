@@ -17,6 +17,12 @@
       "title": "Kaufman's New Repertoire for Black and White",
       "author": "Larry Kaufman",
       "description": "Repertorio completo para blancas (1.e4) y negras (Grünfeld y 1…e5): 187 partidas modelo, planes típicos de cada apertura en español, revisión y entrenador."
+    },
+    {
+      "id": "sokolov",
+      "title": "Winning Chess Middlegames",
+      "author": "Ivan Sokolov",
+      "description": "Estructuras de peones del medio juego (doblados, aislado, colgantes, mayoría central): 33 estructuras con planes explicados en español y 45 partidas modelo, revisión y entrenador."
     }
   ]
 }

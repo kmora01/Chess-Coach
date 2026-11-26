@@ -353,3 +353,11 @@ h3.fco-h { font-size: 16px; border-bottom: 1px solid var(--border); padding-bott
 .rep-content .game-list { border: 1px solid var(--border); border-radius: 10px; }
 @media (max-width: 760px) { .rep-content .game-row { grid-template-columns: 40px 1fr 44px; } .rep-content .game-players, .rep-content .game-progress { display: none; } }
 @media (max-width: 760px) { .rep-row .game-opening { display: block; font-size: 14px; } .rep-row .game-players { display: none; } }
+
+/* Libro de estructuras (Sokolov) */
+.struct-cards { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.struct-card { display: flex; gap: 14px; align-items: center; padding: 12px; }
+.struct-mini { flex: 0 0 120px; }
+.struct-card .card-title { font-size: 16px; line-height: 1.3; }
+.plan-details > summary { font-weight: 600; }
+@media (max-width: 760px) { .struct-cards { grid-template-columns: 1fr; } .struct-mini { flex-basis: 96px; } .struct-mini .mini-board { width: 96px !important; } }
