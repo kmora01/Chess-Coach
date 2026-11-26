@@ -3,7 +3,7 @@
 // partidas modelo.
 import { Chess } from '../vendor/chess.js';
 import { Board } from './board.js';
-import { h, store, boardShell } from './ui.js';
+import { h, store, boardShell, scrollParent, scrollIntoViewIfNeeded } from './ui.js';
 import { renderComment } from './comments.js';
 import { miniBoard } from './miniboard.js';
 import { renderPlan } from './repertoire.js';
@@ -103,21 +103,39 @@ export function viewStructPage(app, book, id) {
     const v = registry[vid];
     if (!v) return;
     current = vid;
+    before = false;
     board.set(v.fen, { lastMove: [v.from, v.to], interactive: false });
+    const cm = app.querySelector(`.cm-move[data-var="${vid}"]`);
+    if (cm) { const sp = scrollParent(cm); scrollIntoViewIfNeeded(sp, cm); }
     app.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
     app.querySelectorAll(`.cm-move[data-var="${vid}"]`).forEach((e) => e.classList.add('current'));
     caption.textContent = 'Variante: ' + v.seq.map((x) => registry[x].label).join(' ');
   };
+  // ← en la primera jugada de una variante muestra la posición de la que sale; Inicio/Fin saltan a sus
+  // extremos y Esc la deja.
+  let before = false;
+  const backToStruct = () => {
+    current = null; before = false; showStruct();
+    caption.textContent = 'Esqueleto de peones de la estructura.';
+    app.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
+  };
   const step = (d) => {
     if (current == null) return;
     const seq = registry[current].seq;
-    const j = seq.indexOf(current) + d;
-    if (j >= 0 && j < seq.length) show(seq[j]);
+    const pos = before ? -1 : seq.indexOf(current);
+    const n = d === 'start' ? 0 : d === 'end' ? seq.length - 1 : pos + d;
+    if (n === -1 || (d === 'start' && pos === 0)) {
+      const first = registry[seq[0]];
+      before = true;
+      board.set(first.before, { interactive: false });
+      return;
+    }
+    if (n >= 0 && n < seq.length) { before = false; show(seq[n]); }
   };
   const ctrl = h('div', { class: 'controls' },
     h('button', { class: 'btn icon', title: 'Jugada anterior (←)', onclick: () => step(-1) }, '◀'),
     h('button', { class: 'btn icon', title: 'Jugada siguiente (→)', onclick: () => step(1) }, '▶'),
-    h('button', { class: 'btn', title: 'Volver al esqueleto de peones', onclick: () => { current = null; showStruct(); caption.textContent = 'Esqueleto de peones de la estructura.'; app.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current')); } }, 'Estructura'),
+    h('button', { class: 'btn', title: 'Volver al esqueleto de peones', onclick: () => backToStruct() }, 'Estructura'),
     h('button', { class: 'btn icon', title: 'Girar tablero', onclick: () => board.flip() }, '⇅'));
 
   const content = h('div', { class: 'rep-content' });
@@ -146,8 +164,13 @@ export function viewStructPage(app, book, id) {
     h('div', { class: 'game-layout rep-layout' }, h('div', { class: 'main sticky' }, shell, caption, ctrl), h('div', { class: 'side rep-side' }, content)));
   const onKey = (e) => {
     if (e.target.matches('input, select, textarea')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
+    else if (e.key === 'Home' && current != null) { step('start'); e.preventDefault(); }
+    else if (e.key === 'End' && current != null) { step('end'); e.preventDefault(); }
+    else if (e.key === 'Escape' && current != null) backToStruct();
+    else if (e.key === 'f') board.flip();
   };
   window.addEventListener('keydown', onKey);
   return () => { window.removeEventListener('keydown', onKey); board.destroy(); };

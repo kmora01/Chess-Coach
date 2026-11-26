@@ -36,8 +36,11 @@ export function enginePanel(getFen, board, { autoStart = false, onLineClick } = 
   const bar = document.querySelector('.evalbar .fill');
   const barText = document.querySelector('.evalbar .txt');
   let shownFen = null;
+  let timer = null;
 
   const run = () => {
+    clearTimeout(timer);
+    lines.classList.remove('stale');
     if (!enabled.v) { lines.innerHTML = ''; status.textContent = 'apagado'; board.shapes([]); setBar(null); return; }
     const fen = getFen();
     if (!fen) return;
@@ -50,11 +53,19 @@ export function enginePanel(getFen, board, { autoStart = false, onLineClick } = 
       return;
     }
     status.textContent = engine.ready ? 'analizando…' : 'cargando motor…';
+    // las líneas de la posición anterior se atenúan hasta que llegan las nuevas, y el análisis espera un
+    // instante: al pasar jugadas deprisa no se arranca y para el motor en cada pulsación.
+    lines.classList.add('stale');
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (fen === shownFen && el.isConnected) start(fen); }, 120);
+  };
+  const start = (fen) => {
     engine.analyse(fen, {
       depth: Number(depthSel.value),
       onInfo: ({ depth, lines: ls }) => {
         if (fen !== shownFen || !el.isConnected) return;
         status.textContent = `Stockfish 17.1 · profundidad ${depth}`;
+        lines.classList.remove('stale');
         lines.innerHTML = '';
         for (const l of ls) {
           const san = uciToSanLine(fen, l.pv, 10);
@@ -104,7 +115,20 @@ export function boardShell() {
   return { shell, boardEl };
 }
 
+// Primer antecesor con barra de desplazamiento propia (o el documento).
+export function scrollParent(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
 export function scrollIntoViewIfNeeded(container, el) {
+  if (container === document.scrollingElement) {
+    const r = el.getBoundingClientRect();
+    if (r.top < 10 || r.bottom > innerHeight - 10) window.scrollBy(0, r.top - innerHeight / 3);
+    return;
+  }
   const c = container.getBoundingClientRect();
   const r = el.getBoundingClientRect();
   if (r.top < c.top + 10 || r.bottom > c.bottom - 10) container.scrollTop += r.top - c.top - c.height / 3;
