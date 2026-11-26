@@ -1,7 +1,7 @@
 import { Chess } from '../vendor/chess.js';
 import { Board } from './board.js';
 import { formatScore } from './engine.js';
-import { h, store, esc, engine, enginePanel, boardShell, scrollIntoViewIfNeeded } from './ui.js';
+import { h, store, esc, engine, enginePanel, boardShell, scrollIntoViewIfNeeded, scrollParent } from './ui.js';
 import { splitGames, parseGame, mainline, nagToSymbol, moveNumberLabel } from './pgn.js';
 import { renderComment, figurine } from './comments.js';
 import { fetchSecret, isLoggedIn, login, logout, AuthError } from './auth.js';
@@ -217,6 +217,7 @@ async function viewGame(bookId, n, params) {
   let idx = Number(params.get('j') || 0); // número de jugadas mostradas (0 = posición inicial)
   let preview = null; // id (en commentRegistry) de la jugada de variante que se está viendo
   let explore = null; // { chess, history: [] } exploración libre desde la posición actual
+  let fast = false; // true mientras se navega con una tecla mantenida (sin animaciones)
 
   const { shell, boardEl } = boardShell();
   const board = new Board(boardEl, { onMove: (m) => onBoardMove(m) });
@@ -259,7 +260,12 @@ async function viewGame(bookId, n, params) {
 
   // ---- lista de jugadas con comentarios
   const moveList = h('div', { class: 'movelist' });
+  // varAnchor[id] = jugada de la partida (idx) a cuyo comentario pertenece la variante: al salir de
+  // ella (o al llegar a su final) se vuelve ahí y no a la posición inicial.
+  const varAnchor = [];
+  const anchorFrom = (from, a) => { for (let k = from; k < commentRegistry.length; k++) varAnchor[k] = a; };
   const intro = game.root.comment ? h('div', { class: 'comment intro', html: renderComment(game.root.comment, fensByPly, startPly, commentRegistry, copts) }) : null;
+  anchorFrom(0, 0);
   if (intro) moveList.append(intro);
   const moveEls = [];
   const commentEls = [];
@@ -278,7 +284,9 @@ async function viewGame(bookId, n, params) {
     const vars = m.variations || [];
     if (m.comment || vars.length) {
       const c = h('div', { class: 'comment' });
+      const r0 = commentRegistry.length;
       if (m.comment) c.innerHTML = renderComment(m.comment, fensByPly, m.ply, commentRegistry, copts);
+      anchorFrom(r0, i + 1);
       c.addEventListener('click', (e) => { if (!e.target.closest('.cm-move')) go(i + 1); });
       commentEls[i] = c;
       moveList.append(c);
@@ -322,11 +330,16 @@ async function viewGame(bookId, n, params) {
       const t = e.target.closest('.cm-move');
       if (!t) return;
       e.stopPropagation();
-      const v = commentRegistry[Number(t.dataset.var)];
-      board.set(v.fen, { lastMove: [v.from, v.to], interactive: false });
-      panelPlan.querySelectorAll('.cm-move.current').forEach((x) => x.classList.remove('current'));
-      t.classList.add('current');
+      planShow(Number(t.dataset.var));
     });
+  }
+
+  // variantes de los planes: se anclan a la jugada de la partida desde la que salen (si salen de ella)
+  for (let k = 0; k < commentRegistry.length; k++) {
+    if (varAnchor[k] != null) continue;
+    const first = commentRegistry[commentRegistry[k].seq[0]];
+    const j = fensBefore.indexOf(first.before);
+    varAnchor[k] = j >= 0 ? j : null;
   }
 
   const side = h('div', { class: 'side' },
@@ -348,21 +361,63 @@ async function viewGame(bookId, n, params) {
     preview = null;
     render();
   }
-  // Navegación: dentro de una variante del libro recorre la variante; si no, la partida.
+  // Sale de la variante del libro y vuelve a la jugada de la partida en cuyo comentario está
+  // (desde ahí → sigue con la partida).
+  function exitVar() {
+    if (preview == null) return;
+    const a = varAnchor[preview];
+    preview = null;
+    if (a != null) idx = a;
+    render();
+  }
+  // Navegación: dentro de una variante del libro recorre la variante (al pasar de su principio o de
+  // su final vuelve a la partida); si no, la partida.
   function nav(d) {
+    if (mode === 'plan') { planNav(d); return; }
     if (mode !== 'review') return;
     if (preview != null && !explore) {
       const seq = commentRegistry[preview].seq;
       const pos = seq.indexOf(preview);
-      if (d === 'start' || (d === -1 && pos === 0)) { preview = null; render(); return; }
+      if (d === 'start') { if (pos === 0) exitVar(); else { preview = seq[0]; render(); } return; }
       if (d === 'end') { preview = seq[seq.length - 1]; render(); return; }
       const np = pos + d;
-      if (np >= 0 && np < seq.length) { preview = seq[np]; render(); }
+      if (np < 0 || np >= seq.length) exitVar();
+      else { preview = seq[np]; render(); }
       return;
     }
     if (d === 'start') go(0);
     else if (d === 'end') go(moves.length);
     else go(idx + d);
+  }
+  // Pestaña Planes: ← → recorren la variante pulsada; al salir de ella se vuelve a la partida.
+  let planCur = null;
+  function planShow(id) {
+    const v = commentRegistry[id];
+    if (!v) return;
+    planCur = id;
+    board.set(v.fen, { lastMove: [v.from, v.to], interactive: false, animate: !fast });
+    panelPlan.querySelectorAll('.cm-move.current').forEach((x) => x.classList.remove('current'));
+    const el = panelPlan.querySelector(`.cm-move[data-var="${id}"]`);
+    if (el) { el.classList.add('current'); scrollIntoViewIfNeeded(scrollParent(el), el); }
+  }
+  function planBack() {
+    const a = planCur != null ? varAnchor[planCur] : null;
+    planCur = null;
+    panelPlan.querySelectorAll('.cm-move.current').forEach((x) => x.classList.remove('current'));
+    if (a != null) idx = a;
+    board.set(fensBefore[idx], { lastMove: moves[idx - 1] ? [moves[idx - 1].from, moves[idx - 1].to] : null, interactive: false, animate: !fast });
+  }
+  function planNav(d) {
+    if (planCur == null) {
+      if (d === 'start') idx = 0; else if (d === 'end') idx = moves.length; else idx = Math.max(0, Math.min(moves.length, idx + d));
+      planBack();
+      return;
+    }
+    const seq = commentRegistry[planCur].seq;
+    const pos = seq.indexOf(planCur);
+    const np = d === 'start' ? 0 : d === 'end' ? seq.length - 1 : pos + d;
+    if (np < 0 || np >= seq.length || (d === 'start' && pos === 0)) planBack();
+    else planShow(seq[np]);
   }
   function render() {
     banner.classList.add('hidden');
@@ -389,30 +444,37 @@ async function viewGame(bookId, n, params) {
       banner.append(line,
         h('div', { class: 'var-actions' },
           h('button', { class: 'btn small icon', title: 'Jugada anterior de la variante', onclick: () => nav(-1) }, '◀'),
-          h('button', { class: 'btn small icon', title: 'Jugada siguiente de la variante', disabled: pos >= v.seq.length - 1 ? 'disabled' : null, onclick: () => nav(1) }, '▶'),
+          h('button', { class: 'btn small icon', title: pos >= v.seq.length - 1 ? 'Fin de la variante: volver a la partida (→)' : 'Jugada siguiente de la variante (→)', onclick: () => nav(1) }, pos >= v.seq.length - 1 ? '↩' : '▶'),
           h('button', { class: 'btn small', onclick: () => { explore = { chess: new Chess(v.fen) }; preview = null; render(); } }, 'Seguir analizando'),
-          h('button', { class: 'btn small', onclick: () => { preview = null; render(); } }, 'Volver a la partida')));
+          h('button', { class: 'btn small', title: 'Volver a la partida (Esc)', onclick: () => exitVar() }, 'Volver a la partida')));
       banner.classList.remove('hidden');
-      board.set(fen, { lastMove: [v.from, v.to], interactive: false });
+      board.set(fen, { lastMove: [v.from, v.to], interactive: false, animate: !fast });
       document.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
       document.querySelectorAll(`.cm-move[data-var="${preview}"]`).forEach((e) => e.classList.add('current'));
     } else if (mode === 'review') {
       fen = fensBefore[idx];
       const m = moves[idx - 1];
-      board.set(fen, { lastMove: m ? [m.from, m.to] : null, interactive: false });
+      board.set(fen, { lastMove: m ? [m.from, m.to] : null, interactive: false, animate: !fast });
       document.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
     }
-    // comentario de la jugada actual bajo el tablero (útil en el móvil)
-    if (mode === 'review' && !explore && preview == null) {
+    // comentario de la jugada actual bajo el tablero (útil en el móvil); se mantiene mientras se
+    // recorre una variante suya para poder saltar a las demás variantes del mismo comentario.
+    if (mode === 'review' && !explore) {
       const c = commentEls[idx - 1] || (idx === 0 ? intro : null);
-      nowComment.innerHTML = c ? c.innerHTML : '';
+      if (nowComment._src !== c) {
+        nowComment._src = c;
+        nowComment.innerHTML = c ? c.innerHTML : '';
+        nowComment.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
+        if (preview != null) nowComment.querySelectorAll(`.cm-move[data-var="${preview}"]`).forEach((e) => e.classList.add('current'));
+      }
       nowComment.classList.toggle('hidden', !c);
-    } else if (mode !== 'review') nowComment.classList.add('hidden');
+    } else if (mode !== 'review' || explore) nowComment.classList.add('hidden');
     moveEls.forEach((el, k) => el.classList.toggle('current', k === idx - 1 && !explore));
     const cur = moveEls[idx - 1];
     if (cur && mode === 'review') {
       const next = cur.closest('.mrow')?.nextElementSibling;
-      const target = next && next.classList.contains('comment') ? next : cur;
+      const pv = preview != null ? moveList.querySelector(`.cm-move[data-var="${preview}"]`) : null;
+      const target = pv || (next && next.classList.contains('comment') ? next : cur);
       scrollIntoViewIfNeeded(moveList, target);
       moveList.querySelectorAll('.comment.active').forEach((e) => e.classList.remove('active'));
       if (next && next.classList.contains('comment')) next.classList.add('active');
@@ -425,6 +487,7 @@ async function viewGame(bookId, n, params) {
     if (mode === 'train') { board.set(v.fen, { lastMove: [v.from, v.to], interactive: false }); trainer.previewing(); return; }
     preview = id;
     explore = null;
+    if (varAnchor[id] != null) idx = varAnchor[id];
     render();
   }
   function startExplore() {
@@ -453,7 +516,7 @@ async function viewGame(bookId, n, params) {
     ctrl.querySelectorAll('.navbtn').forEach((b) => b.classList.toggle('hidden', m !== 'review'));
     explore = null; preview = null;
     if (m === 'train') trainer.enter();
-    else if (m === 'plan') { if (wasTrain) trainer.leave(); if (rep) board.orient(rep); board.set(fensBefore[idx], { lastMove: moves[idx - 1] ? [moves[idx - 1].from, moves[idx - 1].to] : null, interactive: false }); nowComment.classList.add('hidden'); }
+    else if (m === 'plan') { if (wasTrain) trainer.leave(); if (rep) board.orient(rep); planCur = null; planBack(); nowComment.classList.add('hidden'); }
     else { trainer.leave(); if (rep) board.orient(rep); render(); }
   }
 
@@ -629,14 +692,20 @@ async function viewGame(bookId, n, params) {
   }
 
   // teclado
+  // Con la tecla mantenida pulsada (autorrepetición) se quitan las animaciones para que el tablero
+  // siga al ritmo de las pulsaciones.
   const onKey = (e) => {
-    if (e.target.matches('input, select, textarea')) return;
+    if (e.target.matches('input, select, textarea') || e.ctrlKey || e.metaKey || e.altKey) return;
+    fast = e.repeat;
     if (e.key === 'ArrowLeft') { nav(-1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { nav(1); e.preventDefault(); }
-    if (e.key === 'Escape' && preview != null) { preview = null; render(); }
-    if (e.key === 'Home') nav('start');
-    if (e.key === 'End') nav('end');
-    if (e.key === 'f') board.flip();
+    else if (e.key === 'ArrowRight') { nav(1); e.preventDefault(); }
+    else if ((e.key === 'Escape' || e.key === 'ArrowUp') && preview != null && !explore) { exitVar(); e.preventDefault(); }
+    else if (e.key === 'Escape' && mode === 'plan' && planCur != null) planBack();
+    else if (e.key === 'Escape' && explore && mode === 'review') { explore = null; render(); }
+    else if (e.key === 'Home') { nav('start'); e.preventDefault(); }
+    else if (e.key === 'End') { nav('end'); e.preventDefault(); }
+    else if (e.key === 'f') board.flip();
+    fast = false;
   };
   window.addEventListener('keydown', onKey);
   cleanup = () => { window.removeEventListener('keydown', onKey); board.destroy(); };

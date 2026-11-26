@@ -37,7 +37,7 @@ export class Board {
     this.onMove && this.onMove({ from, to, promotion });
   }
 
-  set(fen, { lastMove = null, interactive = this.interactive, userColor = this.userColor, shapes = [] } = {}) {
+  set(fen, { lastMove = null, interactive = this.interactive, userColor = this.userColor, shapes = [], animate = true } = {}) {
     if (this.destroyed) return;
     this.fen = fen;
     this.interactive = interactive;
@@ -45,6 +45,8 @@ export class Board {
     const chess = new Chess(fen);
     const turn = chess.turn() === 'w' ? 'white' : 'black';
     const canMove = interactive && (!userColor || userColor === turn);
+    // animate=false: salto instantáneo (navegación rápida con la tecla mantenida)
+    this.cg.state.animation.enabled = animate;
     this.cg.set({
       fen,
       turnColor: turn,
@@ -53,6 +55,7 @@ export class Board {
       movable: { color: canMove ? turn : undefined, dests: canMove ? legalDests(chess) : new Map() },
     });
     if (!lastMove) this.cg.set({ lastMove: undefined });
+    this.cg.state.animation.enabled = true;
     this.baseShapes = shapes;
     this.cg.setAutoShapes(shapes);
   }

@@ -2,7 +2,7 @@
 // con la introducción del libro y los planes típicos de cada apertura explicados en español.
 import { Chess } from '../vendor/chess.js';
 import { Board } from './board.js';
-import { h, store, boardShell } from './ui.js';
+import { h, store, boardShell, scrollParent, scrollIntoViewIfNeeded } from './ui.js';
 import { renderComment, figurine } from './comments.js';
 import { miniBoard } from './miniboard.js';
 
@@ -112,16 +112,29 @@ export function viewRepChapter(app, book, num) {
     const v = registry[id];
     if (!v) return;
     current = id;
+    before = false;
     board.set(v.fen, { lastMove: [v.from, v.to], interactive: false });
+    const cm = app.querySelector(`.cm-move[data-var="${id}"]`);
+    if (cm) { const sp = scrollParent(cm); scrollIntoViewIfNeeded(sp, cm); }
     app.querySelectorAll('.cm-move.current').forEach((e) => e.classList.remove('current'));
     app.querySelectorAll(`.cm-move[data-var="${id}"]`).forEach((e) => e.classList.add('current'));
     caption.textContent = 'Variante: ' + v.seq.map((k) => registry[k].label).join(' ');
   };
+  // ← en la primera jugada de una variante muestra la posición de la que sale; Inicio/Fin saltan a sus
+  // extremos y Esc la deja.
+  let before = false;
   const step = (d) => {
     if (current == null) return;
     const seq = registry[current].seq;
-    const k = seq.indexOf(current) + d;
-    if (k >= 0 && k < seq.length) show(seq[k]);
+    const pos = before ? -1 : seq.indexOf(current);
+    const n = d === 'start' ? 0 : d === 'end' ? seq.length - 1 : pos + d;
+    if (n === -1 || (d === 'start' && pos === 0)) {
+      const first = registry[seq[0]];
+      before = true;
+      board.set(first.before, { interactive: false });
+      return;
+    }
+    if (n >= 0 && n < seq.length) { before = false; show(seq[n]); }
   };
   const ctrl = h('div', { class: 'controls' },
     h('button', { class: 'btn icon', title: 'Jugada anterior (←)', onclick: () => step(-1) }, '◀'),
@@ -155,8 +168,17 @@ export function viewRepChapter(app, book, num) {
     h('div', { class: 'game-layout rep-layout' }, h('div', { class: 'main sticky' }, shell, caption, ctrl), h('div', { class: 'side rep-side' }, content)));
   const onKey = (e) => {
     if (e.target.matches('input, select, textarea')) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'ArrowLeft') { step(-1); e.preventDefault(); }
-    if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
+    else if (e.key === 'ArrowRight') { step(1); e.preventDefault(); }
+    else if (e.key === 'Home' && current != null) { step('start'); e.preventDefault(); }
+    else if (e.key === 'End' && current != null) { step('end'); e.preventDefault(); }
+    else if (e.key === 'Escape' && current != null) {
+      current = null; before = false; board.set(START, { interactive: false });
+      app.querySelectorAll('.cm-move.current').forEach((x) => x.classList.remove('current'));
+      caption.textContent = 'Pulsa cualquier jugada de los planes o de la introducción para verla en el tablero.';
+    }
+    else if (e.key === 'f') board.flip();
   };
   window.addEventListener('keydown', onKey);
   return () => { window.removeEventListener('keydown', onKey); board.destroy(); };
